@@ -1,33 +1,74 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword
+  isSignInWithEmailLink,
+  sendSignInLinkToEmail,
+  signInWithEmailLink
 } from 'firebase/auth'
 import { auth } from '../firebase'
 import { motion } from 'framer-motion'
 
+const STORAGE_KEY = 'or.pendingEmail'
+
 export function AuthScreen() {
-  const [mode, setMode] = useState<'signin' | 'signup'>('signin')
   const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
+  const [sent, setSent] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [finishing, setFinishing] = useState(false)
+
+  // If the page loaded from an email sign-in link, finish sign-in automatically.
+  useEffect(() => {
+    if (!isSignInWithEmailLink(auth, window.location.href)) return
+    setFinishing(true)
+    let stored = window.localStorage.getItem(STORAGE_KEY) || ''
+    if (!stored) {
+      stored = window.prompt('Please confirm the email you signed in with') || ''
+    }
+    if (!stored) {
+      setFinishing(false)
+      setError('We need the email you used to send the link.')
+      return
+    }
+    signInWithEmailLink(auth, stored, window.location.href)
+      .then(() => {
+        window.localStorage.removeItem(STORAGE_KEY)
+        // Clean the URL so the sign-in params don't linger.
+        window.history.replaceState({}, document.title, window.location.pathname)
+      })
+      .catch((err) => {
+        setError(prettyAuthError(err))
+        setFinishing(false)
+      })
+  }, [])
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     setBusy(true)
     setError(null)
     try {
-      if (mode === 'signin') {
-        await signInWithEmailAndPassword(auth, email.trim(), password)
-      } else {
-        await createUserWithEmailAndPassword(auth, email.trim(), password)
-      }
+      const url = window.location.origin + window.location.pathname
+      await sendSignInLinkToEmail(auth, email.trim(), {
+        url,
+        handleCodeInApp: true
+      })
+      window.localStorage.setItem(STORAGE_KEY, email.trim())
+      setSent(true)
     } catch (err) {
       setError(prettyAuthError(err))
     } finally {
       setBusy(false)
     }
+  }
+
+  if (finishing) {
+    return (
+      <div className="min-h-full flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-5xl mb-3 animate-pulse">🌸</div>
+          <p className="text-berry font-display font-semibold">Signing you in…</p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -46,56 +87,48 @@ export function AuthScreen() {
           </p>
         </div>
 
-        <div className="flex bg-petal/60 rounded-full p-1 mb-5 text-sm font-display font-semibold">
-          <button
-            className={`flex-1 rounded-full py-2 transition ${
-              mode === 'signin' ? 'bg-white text-berry shadow-soft' : 'text-berry/70'
-            }`}
-            onClick={() => setMode('signin')}
-            type="button"
-          >
-            Sign in
-          </button>
-          <button
-            className={`flex-1 rounded-full py-2 transition ${
-              mode === 'signup' ? 'bg-white text-berry shadow-soft' : 'text-berry/70'
-            }`}
-            onClick={() => setMode('signup')}
-            type="button"
-          >
-            Create account
-          </button>
-        </div>
-
-        <form onSubmit={submit} className="space-y-3">
-          <input
-            className="input"
-            type="email"
-            placeholder="you@example.com"
-            value={email}
-            autoComplete="email"
-            onChange={(e) => setEmail(e.target.value)}
-            required
-          />
-          <input
-            className="input"
-            type="password"
-            placeholder="Password"
-            value={password}
-            autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
-            onChange={(e) => setPassword(e.target.value)}
-            minLength={6}
-            required
-          />
-          {error && (
-            <div className="text-sm text-berry bg-petal/70 rounded-2xl px-3 py-2">
-              {error}
-            </div>
-          )}
-          <button className="btn-primary w-full" disabled={busy}>
-            {busy ? '…' : mode === 'signin' ? 'Sign in' : 'Create account'}
-          </button>
-        </form>
+        {sent ? (
+          <div className="text-center space-y-4">
+            <div className="text-4xl">💌</div>
+            <h2 className="font-display font-bold text-deepRose text-lg">Check your inbox</h2>
+            <p className="text-sm text-berry/80">
+              We sent a magic link to <span className="font-semibold">{email}</span>. Open it on this
+              device and you're in — no password needed.
+            </p>
+            <button
+              className="btn-soft w-full"
+              onClick={() => {
+                setSent(false)
+                setEmail('')
+              }}
+            >
+              Use a different email
+            </button>
+          </div>
+        ) : (
+          <form onSubmit={submit} className="space-y-3">
+            <p className="text-xs text-berry/70 text-center mb-1">
+              Type your email — we'll send you a magic sign-in link. No password to remember.
+            </p>
+            <input
+              className="input"
+              type="email"
+              placeholder="you@example.com"
+              value={email}
+              autoComplete="email"
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+            {error && (
+              <div className="text-sm text-berry bg-petal/70 rounded-2xl px-3 py-2">
+                {error}
+              </div>
+            )}
+            <button className="btn-primary w-full" disabled={busy || !email}>
+              {busy ? '…' : 'Send me a magic link 💗'}
+            </button>
+          </form>
+        )}
       </motion.div>
     </div>
   )
@@ -106,15 +139,13 @@ function prettyAuthError(err: unknown): string {
   switch (code) {
     case 'auth/invalid-email':
       return 'That email address looks off.'
-    case 'auth/email-already-in-use':
-      return 'This email already has an account — try signing in.'
-    case 'auth/weak-password':
-      return 'Password needs to be at least 6 characters.'
-    case 'auth/wrong-password':
-    case 'auth/invalid-credential':
-      return 'Wrong email or password.'
-    case 'auth/user-not-found':
-      return 'No account with that email — try creating one.'
+    case 'auth/operation-not-allowed':
+      return 'Email-link sign-in isn\'t enabled yet in the Firebase console.'
+    case 'auth/invalid-action-code':
+    case 'auth/expired-action-code':
+      return 'That sign-in link is expired or has already been used. Request a new one.'
+    case 'auth/unauthorized-continue-uri':
+      return 'This domain isn\'t in the Firebase authorised list yet.'
     default:
       return (err as Error)?.message ?? 'Something went wrong.'
   }
