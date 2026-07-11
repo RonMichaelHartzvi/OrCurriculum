@@ -1,0 +1,45 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    @apply bg-gradient-to-br from-blush via-cream to-petal text-deepRose font-body antialiased;
+    background-attachment: fixed;
+  }
+  h1,
+  h2,
+  h3,
+  h4 {
+    @apply font-display;
+  }
+  button {
+    @apply focus:outline-none focus-visible:ring-2 focus-visible:ring-rose focus-visible:ring-offset-2 focus-visible:ring-offset-blush;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-white/80 backdrop-blur-sm rounded-4xl shadow-petal border border-petal/60;
+  }
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-full bg-berry text-white font-display font-semibold px-5 py-2.5 shadow-soft hover:bg-deepRose active:scale-[0.98] transition;
+  }
+  .btn-soft {
+    @apply inline-flex items-center justify-center gap-2 rounded-full bg-petal text-berry font-display font-semibold px-4 py-2 hover:bg-mauve active:scale-[0.98] transition;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-full text-berry/80 font-display font-semibold px-3 py-1.5 hover:bg-petal/60 transition;
+  }
+  .input {
+    @apply w-full rounded-2xl border border-petal bg-white/80 px-4 py-2.5 font-body text-deepRose placeholder:text-rose/70 focus:outline-none focus:border-rose focus:ring-2 focus:ring-rose/40;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-full bg-petal/70 text-berry px-3 py-1 text-xs font-semibold;
+  }
+}

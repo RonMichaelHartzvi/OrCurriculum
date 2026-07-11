@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+
+# Environment (contains Firebase secrets — never commit)
+.env
+.env.local
+.env.*.local
+
+# Firebase local state
+.firebase/
+.firebaserc
+firebase-debug.log
+firestore-debug.log
+
+# Editor / OS
+.DS_Store
+.vscode/
+.idea/
+*.log
+
+# TS incremental
+*.tsbuildinfo
