@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app'
-import { getAuth } from 'firebase/auth'
+import { GoogleAuthProvider, getAuth } from 'firebase/auth'
 import { getFirestore } from 'firebase/firestore'
 
 const cfg = {
@@ -24,3 +24,16 @@ if (missing.length) {
 export const app = initializeApp(cfg as Record<string, string>)
 export const auth = getAuth(app)
 export const db = getFirestore(app)
+export const googleProvider = new GoogleAuthProvider()
+
+const rawAllowed = import.meta.env.VITE_ALLOWED_EMAILS ?? ''
+export const ALLOWED_EMAILS: string[] = rawAllowed
+  .split(',')
+  .map((e: string) => e.trim().toLowerCase())
+  .filter(Boolean)
+
+export function isAllowed(email: string | null | undefined): boolean {
+  if (!email) return false
+  if (ALLOWED_EMAILS.length === 0) return true
+  return ALLOWED_EMAILS.includes(email.toLowerCase())
+}

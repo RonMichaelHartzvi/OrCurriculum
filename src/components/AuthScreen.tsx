@@ -1,74 +1,26 @@
-import { useEffect, useState } from 'react'
-import {
-  isSignInWithEmailLink,
-  sendSignInLinkToEmail,
-  signInWithEmailLink
-} from 'firebase/auth'
-import { auth } from '../firebase'
+import { useState } from 'react'
+import { signInWithPopup, signOut } from 'firebase/auth'
+import { auth, googleProvider, isAllowed } from '../firebase'
+import { useAuth } from '../hooks/useAuth'
 import { motion } from 'framer-motion'
 
-const STORAGE_KEY = 'or.pendingEmail'
-
 export function AuthScreen() {
-  const [email, setEmail] = useState('')
+  const { user } = useAuth()
   const [busy, setBusy] = useState(false)
-  const [sent, setSent] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [finishing, setFinishing] = useState(false)
 
-  // If the page loaded from an email sign-in link, finish sign-in automatically.
-  useEffect(() => {
-    if (!isSignInWithEmailLink(auth, window.location.href)) return
-    setFinishing(true)
-    let stored = window.localStorage.getItem(STORAGE_KEY) || ''
-    if (!stored) {
-      stored = window.prompt('Please confirm the email you signed in with') || ''
-    }
-    if (!stored) {
-      setFinishing(false)
-      setError('We need the email you used to send the link.')
-      return
-    }
-    signInWithEmailLink(auth, stored, window.location.href)
-      .then(() => {
-        window.localStorage.removeItem(STORAGE_KEY)
-        // Clean the URL so the sign-in params don't linger.
-        window.history.replaceState({}, document.title, window.location.pathname)
-      })
-      .catch((err) => {
-        setError(prettyAuthError(err))
-        setFinishing(false)
-      })
-  }, [])
+  const notAllowed = user != null && !isAllowed(user.email)
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault()
+  async function handleSignIn() {
     setBusy(true)
     setError(null)
     try {
-      const url = window.location.origin + window.location.pathname
-      await sendSignInLinkToEmail(auth, email.trim(), {
-        url,
-        handleCodeInApp: true
-      })
-      window.localStorage.setItem(STORAGE_KEY, email.trim())
-      setSent(true)
+      await signInWithPopup(auth, googleProvider)
     } catch (err) {
       setError(prettyAuthError(err))
     } finally {
       setBusy(false)
     }
-  }
-
-  if (finishing) {
-    return (
-      <div className="min-h-full flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-5xl mb-3 animate-pulse">🌸</div>
-          <p className="text-berry font-display font-semibold">Signing you in…</p>
-        </div>
-      </div>
-    )
   }
 
   return (
@@ -87,47 +39,36 @@ export function AuthScreen() {
           </p>
         </div>
 
-        {sent ? (
-          <div className="text-center space-y-4">
-            <div className="text-4xl">💌</div>
-            <h2 className="font-display font-bold text-deepRose text-lg">Check your inbox</h2>
-            <p className="text-sm text-berry/80">
-              We sent a magic link to <span className="font-semibold">{email}</span>. Open it on this
-              device and you're in — no password needed.
-            </p>
-            <button
-              className="btn-soft w-full"
-              onClick={() => {
-                setSent(false)
-                setEmail('')
-              }}
-            >
-              Use a different email
+        {notAllowed ? (
+          <div className="space-y-4 text-center">
+            <div className="rounded-2xl bg-petal/70 border border-rose/40 p-4 text-sm text-berry">
+              <p className="font-semibold">{user!.email} isn't on the allowlist.</p>
+              <p className="mt-1 text-berry/80">
+                Ask the owner to add your email to the app's allowlist.
+              </p>
+            </div>
+            <button className="btn-soft w-full" onClick={() => signOut(auth)}>
+              Sign out
             </button>
           </div>
         ) : (
-          <form onSubmit={submit} className="space-y-3">
-            <p className="text-xs text-berry/70 text-center mb-1">
-              Type your email — we'll send you a magic sign-in link. No password to remember.
+          <div className="space-y-3">
+            <p className="text-xs text-berry/70 text-center">
+              Sign in with your Google account — one tap, no password 💗
             </p>
-            <input
-              className="input"
-              type="email"
-              placeholder="you@example.com"
-              value={email}
-              autoComplete="email"
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
+            <button
+              className="btn-primary w-full py-3 text-base"
+              onClick={handleSignIn}
+              disabled={busy}
+            >
+              {busy ? '…' : 'Sign in with Google'}
+            </button>
             {error && (
               <div className="text-sm text-berry bg-petal/70 rounded-2xl px-3 py-2">
                 {error}
               </div>
             )}
-            <button className="btn-primary w-full" disabled={busy || !email}>
-              {busy ? '…' : 'Send me a magic link 💗'}
-            </button>
-          </form>
+          </div>
         )}
       </motion.div>
     </div>
@@ -137,15 +78,15 @@ export function AuthScreen() {
 function prettyAuthError(err: unknown): string {
   const code = (err as { code?: string })?.code ?? ''
   switch (code) {
-    case 'auth/invalid-email':
-      return 'That email address looks off.'
+    case 'auth/popup-closed-by-user':
+    case 'auth/cancelled-popup-request':
+      return 'Sign-in was cancelled.'
+    case 'auth/popup-blocked':
+      return 'Your browser blocked the popup — allow popups and try again.'
     case 'auth/operation-not-allowed':
-      return 'Email-link sign-in isn\'t enabled yet in the Firebase console.'
-    case 'auth/invalid-action-code':
-    case 'auth/expired-action-code':
-      return 'That sign-in link is expired or has already been used. Request a new one.'
-    case 'auth/unauthorized-continue-uri':
-      return 'This domain isn\'t in the Firebase authorised list yet.'
+      return "Google sign-in isn't enabled in the Firebase console yet."
+    case 'auth/unauthorized-domain':
+      return "This domain isn't in the Firebase authorised list yet."
     default:
       return (err as Error)?.message ?? 'Something went wrong.'
   }

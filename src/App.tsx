@@ -1,6 +1,7 @@
 import { useAuth } from './hooks/useAuth'
 import { AuthScreen } from './components/AuthScreen'
 import { Dashboard } from './components/Dashboard'
+import { isAllowed } from './firebase'
 
 export default function App() {
   const { user, loading } = useAuth()
@@ -13,5 +14,5 @@ export default function App() {
     )
   }
 
-  return user ? <Dashboard user={user} /> : <AuthScreen />
+  return user && isAllowed(user.email) ? <Dashboard user={user} /> : <AuthScreen />
 }
