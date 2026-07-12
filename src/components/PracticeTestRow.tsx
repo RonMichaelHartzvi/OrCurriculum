@@ -62,7 +62,7 @@ export function PracticeTestRow({
           : 'bg-white/85 border-petal shadow-soft'
       }`}
     >
-      <div className="flex items-center gap-3 px-3 py-2.5">
+      <div className="flex items-center gap-3 px-4 py-3">
         {/* Test-level status donut */}
         <div className="shrink-0" aria-hidden>
           <StatusDonut color={color} pct={overallPct} done={task.done} />
@@ -72,7 +72,7 @@ export function PracticeTestRow({
           {editing ? (
             <input
               autoFocus
-              className="input !py-1.5"
+              className="input !py-1.5 text-base"
               value={editText}
               onChange={(e) => setEditText(e.target.value)}
               onBlur={commitEdit}
@@ -90,30 +90,36 @@ export function PracticeTestRow({
                 setEditText(task.title)
                 setEditing(true)
               }}
-              className={`text-left w-full font-body font-semibold text-berry hover:text-deepRose transition ${
+              className={`text-left w-full font-body font-semibold text-base sm:text-lg text-berry hover:text-deepRose transition leading-tight ${
                 task.done ? 'line-through text-berry/60' : ''
               }`}
             >
               {task.title}
             </button>
           )}
-          <div className="mt-1 flex items-center gap-2 flex-wrap text-xs">
-            <span className="chip !text-[10px] !py-0.5">Practice test</span>
-            <span className="text-berry/70">{total} Qs</span>
+          <div className="mt-1.5 flex items-center gap-2 flex-wrap text-sm">
+            <span className="chip !text-xs !py-1">Practice test</span>
+            <span className="text-berry/70 font-semibold">{total} Qs</span>
             <StatusSummary counts={counts} />
           </div>
         </div>
 
         <button
           onClick={() => setExpanded((v) => !v)}
-          className="btn-ghost text-xs !px-3"
+          className="shrink-0 w-10 h-10 rounded-full bg-petal/70 hover:bg-mauve text-berry text-xl font-bold flex items-center justify-center transition active:scale-95"
           aria-label={expanded ? 'Collapse' : 'Expand'}
         >
-          {expanded ? '▴' : '▾'}
+          <motion.span
+            animate={{ rotate: expanded ? 180 : 0 }}
+            transition={{ type: 'spring', damping: 18, stiffness: 260 }}
+            className="inline-block leading-none"
+          >
+            ⌄
+          </motion.span>
         </button>
         <button
           onClick={() => onRemove(task.id)}
-          className="opacity-0 group-hover:opacity-100 focus:opacity-100 text-berry/50 hover:text-berry transition text-sm px-1"
+          className="shrink-0 w-8 h-8 rounded-full text-berry/40 hover:text-berry hover:bg-petal/40 transition text-xl flex items-center justify-center"
           aria-label="Delete practice test"
         >
           ×
@@ -129,14 +135,14 @@ export function PracticeTestRow({
             className="overflow-hidden"
           >
             <div className="px-4 pb-4 pt-1">
-              <div className="grid grid-cols-6 sm:grid-cols-8 gap-2">
+              <div className="grid grid-cols-5 sm:grid-cols-7 gap-2">
                 {questions.map((q, i) => {
                   const meta = QUESTION_STATUS_META[q]
                   return (
                     <button
                       key={i}
                       onClick={() => setPickingIndex(i)}
-                      className="rounded-xl text-xs font-semibold h-10 flex flex-col items-center justify-center leading-tight border transition active:scale-[0.97]"
+                      className="rounded-2xl font-semibold h-14 flex flex-col items-center justify-center leading-tight border-2 transition active:scale-[0.97]"
                       style={{
                         background: meta.bg,
                         color: meta.text,
@@ -144,8 +150,8 @@ export function PracticeTestRow({
                       }}
                       aria-label={`Question ${i + 1}: ${meta.label}`}
                     >
-                      <span className="opacity-70 text-[10px]">Q{i + 1}</span>
-                      <span className="text-sm leading-none">{meta.symbol}</span>
+                      <span className="opacity-70 text-xs">Q{i + 1}</span>
+                      <span className="text-xl leading-none mt-0.5">{meta.symbol}</span>
                     </button>
                   )
                 })}
@@ -153,7 +159,7 @@ export function PracticeTestRow({
 
               <div className="mt-4 flex items-center gap-2">
                 <button
-                  className="btn-soft text-xs"
+                  className="btn-soft text-sm"
                   onClick={() => {
                     if (confirm('Reset all questions to Not done yet?')) onReset(task)
                   }}
@@ -161,7 +167,7 @@ export function PracticeTestRow({
                   Reset all
                 </button>
                 <div className="flex-1" />
-                <button className="btn-ghost text-xs" onClick={() => setExpanded(false)}>
+                <button className="btn-ghost text-sm" onClick={() => setExpanded(false)}>
                   Collapse
                 </button>
               </div>
@@ -227,13 +233,13 @@ function StatusSummary({ counts }: { counts: Record<QuestionStatus, number> }) {
   if (parts.length === 0) return null
 
   return (
-    <span className="inline-flex items-center gap-1.5 text-[11px] text-berry/80">
+    <span className="inline-flex items-center gap-2 text-sm text-berry/80">
       {parts.map((p, i) => {
         const meta = QUESTION_STATUS_META[p.key]
         return (
-          <span key={p.key} className="inline-flex items-center gap-0.5">
+          <span key={p.key} className="inline-flex items-center gap-1">
             <span
-              className="inline-block w-2 h-2 rounded-full"
+              className="inline-block w-2.5 h-2.5 rounded-full"
               style={{ background: meta.border }}
               aria-hidden
             />
@@ -256,8 +262,8 @@ function StatusDonut({
   pct: number
   done: boolean
 }) {
-  const size = 32
-  const stroke = 4
+  const size = 44
+  const stroke = 5
   const r = (size - stroke) / 2
   const c = 2 * Math.PI * r
   const off = c * (1 - pct / 100)
@@ -286,7 +292,7 @@ function StatusDonut({
       </svg>
       {done && (
         <span
-          className="absolute inset-0 flex items-center justify-center text-[11px] font-bold"
+          className="absolute inset-0 flex items-center justify-center text-base font-bold"
           style={{ color }}
         >
           ✓

@@ -118,15 +118,14 @@ export function TaskList({
         </button>
       </form>
 
-      <div className="-mt-2">
-        <button
-          type="button"
-          className="btn-ghost text-xs"
-          onClick={() => setShowTestDialog(true)}
-        >
-          + Practice test
-        </button>
-      </div>
+      <button
+        type="button"
+        className="w-full flex items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-rose/60 bg-white/70 hover:bg-petal/60 text-berry font-display font-semibold py-3 text-base transition active:scale-[0.99]"
+        onClick={() => setShowTestDialog(true)}
+      >
+        <span className="text-xl leading-none">📝</span>
+        Add a practice test
+      </button>
 
       {tasks.length === 0 ? (
         <div className="text-center text-berry/60 text-sm py-8">
