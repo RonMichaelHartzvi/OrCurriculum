@@ -1,34 +1,31 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import type { Course, Entry, Goal } from '../types'
+import type { Course, Entry, Goal, PeriodKind } from '../types'
 import { RingProgress } from './RingProgress'
-import { GoalFormDialog } from './GoalFormDialog'
 import { QuickAddSheet } from './QuickAddSheet'
+import { GoalFormDialog } from './GoalFormDialog'
 import { formatPeriodRange, periodKey } from '../lib/periods'
 
 interface Props {
   course: Course
   goals: Goal[]
   entries: Entry[]
-  onEdit: () => void
-  onAddGoal: (data: { metric: string; target: number; period: 'weekly' | 'daily' }) => Promise<void>
-  onUpdateGoal: (goalId: string, patch: Partial<Goal>) => Promise<void>
-  onRemoveGoal: (goalId: string) => Promise<void>
+  onOpen: () => void
+  onAddGoal: (data: { metric: string; target: number; period: PeriodKind }) => Promise<void>
   onLog: (goal: Goal, amount: number) => Promise<void>
+  openTaskCount?: number
 }
 
 export function CourseCard({
   course,
   goals,
   entries,
-  onEdit,
+  onOpen,
   onAddGoal,
-  onUpdateGoal,
-  onRemoveGoal,
-  onLog
+  onLog,
+  openTaskCount
 }: Props) {
   const [showGoalForm, setShowGoalForm] = useState(false)
-  const [editingGoal, setEditingGoal] = useState<Goal | null>(null)
   const [logGoal, setLogGoal] = useState<Goal | null>(null)
 
   const progressFor = (goal: Goal) => {
@@ -38,12 +35,28 @@ export function CourseCard({
       .reduce((s, e) => s + (e.amount || 0), 0)
   }
 
+  const stop = (fn: () => void) => (e: React.MouseEvent) => {
+    e.stopPropagation()
+    fn()
+  }
+
   return (
     <motion.div
       layout
       initial={{ y: 20, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
-      className="card p-6"
+      whileHover={{ y: -2 }}
+      whileTap={{ scale: 0.99 }}
+      onClick={onOpen}
+      className="card p-6 cursor-pointer text-left"
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onOpen()
+        }
+      }}
     >
       <div className="flex items-start gap-3">
         <div
@@ -58,17 +71,18 @@ export function CourseCard({
           </h3>
           <p className="text-xs text-berry/70">
             {goals.length} {goals.length === 1 ? 'goal' : 'goals'}
+            {typeof openTaskCount === 'number' && openTaskCount > 0 && (
+              <> · {openTaskCount} open {openTaskCount === 1 ? 'task' : 'tasks'}</>
+            )}
           </p>
         </div>
-        <button className="btn-ghost text-sm" onClick={onEdit}>
-          Edit
-        </button>
+        <div className="text-berry/40 text-xl leading-none pt-1">›</div>
       </div>
 
       {goals.length === 0 ? (
-        <div className="mt-5 flex flex-col items-center gap-2 py-6 text-center">
+        <div className="mt-5 flex flex-col items-center gap-2 py-4 text-center">
           <div className="text-berry/60 text-sm">No goals yet.</div>
-          <button className="btn-primary" onClick={() => setShowGoalForm(true)}>
+          <button className="btn-primary" onClick={stop(() => setShowGoalForm(true))}>
             + Add a goal
           </button>
         </div>
@@ -95,20 +109,17 @@ export function CourseCard({
                     </span>
                   </div>
                   <div className="mt-2 flex gap-2 flex-wrap">
-                    <button className="btn-primary text-sm" onClick={() => setLogGoal(g)}>
+                    <button
+                      className="btn-primary text-sm"
+                      onClick={stop(() => setLogGoal(g))}
+                    >
                       + Log
-                    </button>
-                    <button className="btn-soft text-sm" onClick={() => setEditingGoal(g)}>
-                      Edit
                     </button>
                   </div>
                 </div>
               </div>
             )
           })}
-          <button className="btn-ghost w-full mt-2" onClick={() => setShowGoalForm(true)}>
-            + Another goal
-          </button>
         </div>
       )}
 
@@ -118,17 +129,6 @@ export function CourseCard({
         courseName={course.name}
         onSave={onAddGoal}
       />
-
-      {editingGoal && (
-        <GoalFormDialog
-          open={!!editingGoal}
-          onClose={() => setEditingGoal(null)}
-          courseName={course.name}
-          initial={editingGoal}
-          onSave={async (data) => onUpdateGoal(editingGoal.id, data)}
-          onDelete={async () => onRemoveGoal(editingGoal.id)}
-        />
-      )}
 
       {logGoal && (
         <QuickAddSheet

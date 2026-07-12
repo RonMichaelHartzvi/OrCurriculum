@@ -5,26 +5,27 @@ import { useCourses } from '../hooks/useCourses'
 import { useGoals } from '../hooks/useGoals'
 import { useEntries } from '../hooks/useEntries'
 import { useHistory } from '../hooks/useHistory'
+import { useTasks } from '../hooks/useTasks'
+import { openCourse } from '../hooks/useRoute'
 import { archivePastPeriods } from '../lib/archive'
 import { CourseCard } from './CourseCard'
 import { CourseFormDialog } from './CourseFormDialog'
 import { HistoryView } from './HistoryView'
 import { periodKey } from '../lib/periods'
-import type { Course, Goal, PeriodKind } from '../types'
+import type { Goal, PeriodKind } from '../types'
 import { motion, AnimatePresence } from 'framer-motion'
 
 export function Dashboard({ user }: { user: User }) {
   const uid = user.uid
-  const { courses, addCourse, updateCourse, removeCourse } = useCourses(uid)
-  const { goals, addGoal, updateGoal, removeGoal } = useGoals(uid)
+  const { courses, addCourse } = useCourses(uid)
+  const { goals, addGoal } = useGoals(uid)
   const { entries, addEntry } = useEntries(uid)
   const { history } = useHistory(uid)
+  const { tasks } = useTasks(uid)
 
   const [showNewCourse, setShowNewCourse] = useState(false)
-  const [editingCourse, setEditingCourse] = useState<Course | null>(null)
   const [showHistory, setShowHistory] = useState(false)
 
-  // Auto-archive past periods once we have the goal list.
   useEffect(() => {
     if (goals.length) archivePastPeriods(uid, goals).catch((e) => console.warn('archive:', e))
   }, [uid, goals])
@@ -37,6 +38,15 @@ export function Dashboard({ user }: { user: User }) {
     }
     return m
   }, [goals])
+
+  const openTasksByCourse = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const t of tasks) {
+      if (t.done) continue
+      m.set(t.courseId, (m.get(t.courseId) ?? 0) + 1)
+    }
+    return m
+  }, [tasks])
 
   return (
     <div className="min-h-full">
@@ -81,10 +91,8 @@ export function Dashboard({ user }: { user: User }) {
                     course={c}
                     goals={goalsByCourse.get(c.id) ?? []}
                     entries={entries}
-                    onEdit={() => setEditingCourse(c)}
+                    onOpen={() => openCourse(c.id)}
                     onAddGoal={(data) => addGoal({ courseId: c.id, ...data })}
-                    onUpdateGoal={(id, patch) => updateGoal(id, patch)}
-                    onRemoveGoal={(id) => removeGoal(id)}
                     onLog={(goal, amount) =>
                       addEntry({
                         courseId: goal.courseId,
@@ -94,6 +102,7 @@ export function Dashboard({ user }: { user: User }) {
                         periodKey: periodKey(goal.period as PeriodKind)
                       })
                     }
+                    openTaskCount={openTasksByCourse.get(c.id) ?? 0}
                   />
                 </motion.div>
               ))}
@@ -117,16 +126,6 @@ export function Dashboard({ user }: { user: User }) {
         onClose={() => setShowNewCourse(false)}
         onSave={(data) => addCourse(data)}
       />
-
-      {editingCourse && (
-        <CourseFormDialog
-          open={!!editingCourse}
-          onClose={() => setEditingCourse(null)}
-          initial={editingCourse}
-          onSave={(data) => updateCourse(editingCourse.id, data)}
-          onDelete={() => removeCourse(editingCourse.id)}
-        />
-      )}
 
       <HistoryView
         open={showHistory}
