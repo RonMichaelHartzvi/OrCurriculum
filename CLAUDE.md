@@ -200,6 +200,35 @@ Describe added/renamed/removed fields.
 
 If the change is stacked on another PR, add a **Stacked on #N** callout at the top so the reviewer knows the diff base.
 
+### Docs stay in sync with code — every PR
+
+`README.md` and `CLAUDE.md` are part of the surface area every PR must consider, not files to update "later."
+
+**Update `README.md` when**
+- Features change (add / remove / rename anything a user would notice)
+- Setup steps change (new prerequisites, env vars, console clicks)
+- The data-model table or environment example drifts from reality
+- Deploy story or scripts change
+
+**Update `CLAUDE.md` when**
+- Architecture changes (new top-level collections, new hook patterns, new folders in `src/`)
+- A convention is added, removed, or refined (workflow, style, naming)
+- A gotcha is discovered that would bite a future contributor
+- A section becomes inaccurate because the code moved on
+
+**In the PR body**
+- If docs are touched: include them in the "What changed" list with a one-liner explaining the update.
+- If docs are *not* touched: include an explicit line — "**Docs**: no README / CLAUDE.md update needed (bug fix / internal refactor / etc.)" — so it's clear the question was considered, not overlooked.
+
+**Reviewer's job**
+Push back on any PR that:
+- Adds a user-visible feature without touching `README.md`
+- Changes architecture, conventions, or gotchas without touching `CLAUDE.md`
+- Says "docs to follow in another PR" without linking the follow-up
+
+**When separate is fine**
+Small doc-only fixes discovered while working on something unrelated can either ride along with a one-line note in the PR summary, or land as their own tiny doc-only PR. Either is fine — the goal is *keep the docs true*, not force artificial bundling.
+
 ### Deploys are separate from merges
 - `firebase deploy --only hosting` ships whatever is in `dist/` **regardless of git state.** The branch protection gates code review, not production.
 - For a two-person hobby project this is convenient — deploy to try things live, then land the PR when review's clean. If we grow this or if the app starts holding critical data, we should tighten this (CI-driven deploys from `main` only).
