@@ -27,7 +27,16 @@ export function CoursePage({ user, courseId }: Props) {
   const { goals, addGoal, updateGoal, removeGoal } = useGoals(uid)
   const { entries, addEntry } = useEntries(uid)
   const { history } = useHistory(uid)
-  const { tasks, addTask, toggleTask, updateTaskTitle, removeTask } = useTasks(uid)
+  const {
+    tasks,
+    addTask,
+    addPracticeTest,
+    toggleTask,
+    updateTaskTitle,
+    updateQuestionStatus,
+    resetPracticeTest,
+    removeTask
+  } = useTasks(uid)
 
   const [showEditCourse, setShowEditCourse] = useState(false)
   const [showNewGoal, setShowNewGoal] = useState(false)
@@ -185,10 +194,17 @@ export function CoursePage({ user, courseId }: Props) {
           <TaskList
             tasks={courseTasks}
             color={course.color}
-            onAdd={(title) => addTask({ courseId, title })}
+            onAddRegular={(title) => addTask({ courseId, title })}
+            onAddPracticeTest={({ title, questionCount }) =>
+              addPracticeTest({ courseId, title, questionCount })
+            }
             onToggle={(id, done) => toggleTask(id, done)}
             onEdit={(id, title) => updateTaskTitle(id, title)}
             onRemove={(id) => removeTask(id)}
+            onUpdateQuestion={(task, index, status) =>
+              updateQuestionStatus(task, index, status)
+            }
+            onResetPracticeTest={(task) => resetPracticeTest(task)}
           />
         </section>
 

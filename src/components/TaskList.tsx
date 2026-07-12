@@ -1,24 +1,51 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import type { Task } from '../types'
+import type { QuestionStatus, Task } from '../types'
+import { PracticeTestDialog } from './PracticeTestDialog'
+import { PracticeTestRow } from './PracticeTestRow'
 
 interface Props {
   tasks: Task[]
   color: string
-  onAdd: (title: string) => Promise<void>
+  onAddRegular: (title: string) => Promise<void>
+  onAddPracticeTest: (data: { title: string; questionCount: number }) => Promise<void>
   onToggle: (id: string, done: boolean) => Promise<void>
   onEdit: (id: string, title: string) => Promise<void>
   onRemove: (id: string) => Promise<void>
+  onUpdateQuestion: (task: Task, index: number, status: QuestionStatus) => Promise<void>
+  onResetPracticeTest: (task: Task) => Promise<void>
 }
 
-export function TaskList({ tasks, color, onAdd, onToggle, onEdit, onRemove }: Props) {
+const DEFAULT_QUESTION_COUNT = 20
+
+export function TaskList({
+  tasks,
+  color,
+  onAddRegular,
+  onAddPracticeTest,
+  onToggle,
+  onEdit,
+  onRemove,
+  onUpdateQuestion,
+  onResetPracticeTest
+}: Props) {
   const [draft, setDraft] = useState('')
   const [busy, setBusy] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingText, setEditingText] = useState('')
+  const [showTestDialog, setShowTestDialog] = useState(false)
 
   const openTasks = tasks.filter((t) => !t.done)
   const doneTasks = tasks.filter((t) => t.done)
+
+  // Smart default: most-recent practice test's question count on this course.
+  // useTasks orders by createdAt desc, so `find` returns the newest.
+  const defaultQuestionCount = useMemo(() => {
+    const lastCount = tasks.find(
+      (t) => t.type === 'practiceTest' && typeof t.questionCount === 'number'
+    )?.questionCount
+    return lastCount ?? DEFAULT_QUESTION_COUNT
+  }, [tasks])
 
   async function submitAdd(e: React.FormEvent) {
     e.preventDefault()
@@ -26,7 +53,7 @@ export function TaskList({ tasks, color, onAdd, onToggle, onEdit, onRemove }: Pr
     if (!title) return
     setBusy(true)
     try {
-      await onAdd(title)
+      await onAddRegular(title)
       setDraft('')
     } finally {
       setBusy(false)
@@ -38,6 +65,43 @@ export function TaskList({ tasks, color, onAdd, onToggle, onEdit, onRemove }: Pr
     if (t) await onEdit(id, t)
     setEditingId(null)
     setEditingText('')
+  }
+
+  const renderRow = (t: Task) => {
+    if (t.type === 'practiceTest') {
+      return (
+        <PracticeTestRow
+          key={t.id}
+          task={t}
+          color={color}
+          onUpdateQuestion={onUpdateQuestion}
+          onReset={onResetPracticeTest}
+          onEditTitle={onEdit}
+          onRemove={onRemove}
+        />
+      )
+    }
+    return (
+      <TaskRow
+        key={t.id}
+        task={t}
+        color={color}
+        editing={editingId === t.id}
+        editingText={editingText}
+        onStartEdit={() => {
+          setEditingId(t.id)
+          setEditingText(t.title)
+        }}
+        onChangeEditText={setEditingText}
+        onCommitEdit={() => commitEdit(t.id)}
+        onCancelEdit={() => {
+          setEditingId(null)
+          setEditingText('')
+        }}
+        onToggle={() => onToggle(t.id, !t.done)}
+        onRemove={() => onRemove(t.id)}
+      />
+    )
   }
 
   return (
@@ -54,6 +118,16 @@ export function TaskList({ tasks, color, onAdd, onToggle, onEdit, onRemove }: Pr
         </button>
       </form>
 
+      <div className="-mt-2">
+        <button
+          type="button"
+          className="btn-ghost text-xs"
+          onClick={() => setShowTestDialog(true)}
+        >
+          + Practice test
+        </button>
+      </div>
+
       {tasks.length === 0 ? (
         <div className="text-center text-berry/60 text-sm py-8">
           🌱 No tasks yet — add one above.
@@ -61,29 +135,7 @@ export function TaskList({ tasks, color, onAdd, onToggle, onEdit, onRemove }: Pr
       ) : (
         <>
           <ul className="space-y-2">
-            <AnimatePresence initial={false}>
-              {openTasks.map((t) => (
-                <TaskRow
-                  key={t.id}
-                  task={t}
-                  color={color}
-                  editing={editingId === t.id}
-                  editingText={editingText}
-                  onStartEdit={() => {
-                    setEditingId(t.id)
-                    setEditingText(t.title)
-                  }}
-                  onChangeEditText={setEditingText}
-                  onCommitEdit={() => commitEdit(t.id)}
-                  onCancelEdit={() => {
-                    setEditingId(null)
-                    setEditingText('')
-                  }}
-                  onToggle={() => onToggle(t.id, true)}
-                  onRemove={() => onRemove(t.id)}
-                />
-              ))}
-            </AnimatePresence>
+            <AnimatePresence initial={false}>{openTasks.map(renderRow)}</AnimatePresence>
           </ul>
 
           {doneTasks.length > 0 && (
@@ -92,34 +144,19 @@ export function TaskList({ tasks, color, onAdd, onToggle, onEdit, onRemove }: Pr
                 Done · {doneTasks.length}
               </div>
               <ul className="space-y-2">
-                <AnimatePresence initial={false}>
-                  {doneTasks.map((t) => (
-                    <TaskRow
-                      key={t.id}
-                      task={t}
-                      color={color}
-                      editing={editingId === t.id}
-                      editingText={editingText}
-                      onStartEdit={() => {
-                        setEditingId(t.id)
-                        setEditingText(t.title)
-                      }}
-                      onChangeEditText={setEditingText}
-                      onCommitEdit={() => commitEdit(t.id)}
-                      onCancelEdit={() => {
-                        setEditingId(null)
-                        setEditingText('')
-                      }}
-                      onToggle={() => onToggle(t.id, false)}
-                      onRemove={() => onRemove(t.id)}
-                    />
-                  ))}
-                </AnimatePresence>
+                <AnimatePresence initial={false}>{doneTasks.map(renderRow)}</AnimatePresence>
               </ul>
             </div>
           )}
         </>
       )}
+
+      <PracticeTestDialog
+        open={showTestDialog}
+        onClose={() => setShowTestDialog(false)}
+        defaultQuestionCount={defaultQuestionCount}
+        onSave={(data) => onAddPracticeTest(data)}
+      />
     </div>
   )
 }
