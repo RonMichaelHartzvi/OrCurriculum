@@ -30,6 +30,9 @@ export interface Entry {
   periodKey: string
 }
 
+export type TaskType = 'regular' | 'practiceTest'
+export type QuestionStatus = 'unanswered' | 'succeeded' | 'failed' | 'retry'
+
 export interface Task {
   id: string
   courseId: string
@@ -37,7 +40,56 @@ export interface Task {
   done: boolean
   createdAt: Timestamp | null
   completedAt: Timestamp | null
+  type?: TaskType
+  questionCount?: number
+  questions?: QuestionStatus[]
 }
+
+export interface QuestionStatusMeta {
+  label: string
+  symbol: string
+  bg: string
+  border: string
+  text: string
+}
+
+export const QUESTION_STATUS_META: Record<QuestionStatus, QuestionStatusMeta> = {
+  succeeded: {
+    label: 'Succeeded',
+    symbol: '✓',
+    bg: '#A7F3D0',
+    border: '#34D399',
+    text: '#065F46'
+  },
+  failed: {
+    label: 'Failed',
+    symbol: '✗',
+    bg: '#FDA4AF',
+    border: '#F43F5E',
+    text: '#881337'
+  },
+  retry: {
+    label: 'Try again',
+    symbol: '↻',
+    bg: '#FDBA74',
+    border: '#F97316',
+    text: '#7C2D12'
+  },
+  unanswered: {
+    label: 'Not done yet',
+    symbol: '○',
+    bg: '#FCE7F3',
+    border: '#F9A8D4',
+    text: '#9D174D'
+  }
+}
+
+export const QUESTION_STATUS_ORDER: QuestionStatus[] = [
+  'succeeded',
+  'failed',
+  'retry',
+  'unanswered'
+]
 
 export interface HistoryRecord {
   id: string
