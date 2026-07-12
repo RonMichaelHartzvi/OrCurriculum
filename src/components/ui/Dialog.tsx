@@ -27,7 +27,7 @@ export function Dialog({ open, onClose, title, children }: DialogProps) {
           onClick={onClose}
         >
           <motion.div
-            className="card w-full max-w-md p-6"
+            className="card w-full max-w-md p-6 max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto"
             initial={{ y: 40, opacity: 0, scale: 0.98 }}
             animate={{ y: 0, opacity: 1, scale: 1 }}
             exit={{ y: 30, opacity: 0, scale: 0.98 }}
