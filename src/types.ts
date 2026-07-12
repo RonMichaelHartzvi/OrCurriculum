@@ -30,6 +30,15 @@ export interface Entry {
   periodKey: string
 }
 
+export interface Task {
+  id: string
+  courseId: string
+  title: string
+  done: boolean
+  createdAt: Timestamp | null
+  completedAt: Timestamp | null
+}
+
 export interface HistoryRecord {
   id: string
   courseId: string
