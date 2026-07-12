@@ -6,14 +6,19 @@ import { useGoals } from '../hooks/useGoals'
 import { useEntries } from '../hooks/useEntries'
 import { useHistory } from '../hooks/useHistory'
 import { useTasks } from '../hooks/useTasks'
+import { useSession } from '../hooks/useSession'
+import { usePlannedBlocks } from '../hooks/usePlannedBlocks'
 import { openDashboard } from '../hooks/useRoute'
 import { archivePastPeriods } from '../lib/archive'
 import { formatPeriodRange, periodKey } from '../lib/periods'
+import { formatDuration } from '../lib/time'
 import { RingProgress } from './RingProgress'
 import { QuickAddSheet } from './QuickAddSheet'
 import { CourseFormDialog } from './CourseFormDialog'
 import { GoalFormDialog } from './GoalFormDialog'
 import { TaskList } from './TaskList'
+import { SessionTimer } from './SessionTimer'
+import { DayPlan } from './DayPlan'
 import type { Goal, PeriodKind } from '../types'
 
 interface Props {
@@ -42,6 +47,21 @@ export function CoursePage({ user, courseId }: Props) {
   const [showNewGoal, setShowNewGoal] = useState(false)
   const [editingGoal, setEditingGoal] = useState<Goal | null>(null)
   const [logGoal, setLogGoal] = useState<Goal | null>(null)
+  const [sessionForGoal, setSessionForGoal] = useState<Goal | null | 'freeform'>(null)
+
+  const {
+    active: activeSession,
+    startSession,
+    completeSession,
+    cancelSession,
+    endNow: endNowSession
+  } = useSession(uid)
+  const {
+    blocks: plannedBlocks,
+    addBlock,
+    updateBlock,
+    removeBlock
+  } = usePlannedBlocks(uid)
 
   const course = courses.find((c) => c.id === courseId)
   const courseGoals = useMemo(
@@ -147,6 +167,11 @@ export function CoursePage({ user, courseId }: Props) {
             <div className="space-y-5">
               {courseGoals.map((g) => {
                 const p = progressFor(g)
+                const isTime = g.unit === 'minutes'
+                const ringLabel = isTime
+                  ? `${formatDuration(p)} / ${formatDuration(g.target)}`
+                  : `${p} / ${g.target}`
+                const ringSublabel = isTime ? 'study time' : g.metric
                 return (
                   <motion.div
                     key={g.id}
@@ -159,8 +184,8 @@ export function CoursePage({ user, courseId }: Props) {
                       color={course.color}
                       size={124}
                       strokeWidth={12}
-                      label={`${p} / ${g.target}`}
-                      sublabel={g.metric}
+                      label={ringLabel}
+                      sublabel={ringSublabel}
                     />
                     <div className="flex-1 min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
@@ -173,6 +198,15 @@ export function CoursePage({ user, courseId }: Props) {
                         <button className="btn-primary text-sm" onClick={() => setLogGoal(g)}>
                           + Log
                         </button>
+                        {isTime && (
+                          <button
+                            className="btn-soft text-sm"
+                            onClick={() => setSessionForGoal(g)}
+                            disabled={Boolean(activeSession && activeSession.courseId !== courseId)}
+                          >
+                            ▶ Start session
+                          </button>
+                        )}
                         <button
                           className="btn-soft text-sm"
                           onClick={() => setEditingGoal(g)}
@@ -186,6 +220,38 @@ export function CoursePage({ user, courseId }: Props) {
               })}
             </div>
           )}
+        </section>
+
+        {/* Day plan section */}
+        <section className="card p-6">
+          <SectionHeader
+            title="Day plan"
+            subtitle="Time blocks for today. Push them to Google Calendar if you like."
+            action={
+              <button
+                className="btn-soft text-sm"
+                onClick={() => setSessionForGoal('freeform')}
+                disabled={Boolean(activeSession && activeSession.courseId !== courseId)}
+              >
+                ▶ Quick session
+              </button>
+            }
+          />
+          <DayPlan
+            courses={courses}
+            goals={goals}
+            blocks={plannedBlocks}
+            activeSession={activeSession}
+            onAddBlock={addBlock}
+            onUpdateBlock={updateBlock}
+            onRemoveBlock={removeBlock}
+            onStartSession={startSession}
+            onCompleteSession={completeSession}
+            onCancelSession={cancelSession}
+            onEndNowSession={endNowSession}
+            courseFilter={courseId}
+            compact
+          />
         </section>
 
         {/* Tasks section */}
@@ -221,6 +287,10 @@ export function CoursePage({ user, courseId }: Props) {
               {courseHistory.map((h) => {
                 const pct = h.target > 0 ? Math.round((h.achieved / h.target) * 100) : 0
                 const done = h.achieved >= h.target
+                const isTime = h.metric === 'minutes'
+                const achievedText = isTime ? formatDuration(h.achieved) : `${h.achieved}`
+                const targetText = isTime ? formatDuration(h.target) : `${h.target}`
+                const metricText = isTime ? 'studied' : h.metric
                 return (
                   <li
                     key={h.id}
@@ -235,7 +305,7 @@ export function CoursePage({ user, courseId }: Props) {
                         {h.period} · {h.periodKey}
                       </div>
                       <div className="text-xs text-berry/70">
-                        {h.achieved} / {h.target} {h.metric}
+                        {achievedText} / {targetText} {metricText}
                       </div>
                     </div>
                     <div
@@ -279,6 +349,21 @@ export function CoursePage({ user, courseId }: Props) {
           initial={editingGoal}
           onSave={(data) => updateGoal(editingGoal.id, data)}
           onDelete={() => removeGoal(editingGoal.id)}
+        />
+      )}
+
+      {sessionForGoal && (
+        <SessionTimer
+          open={Boolean(sessionForGoal)}
+          onClose={() => setSessionForGoal(null)}
+          course={course}
+          goals={courseGoals}
+          active={activeSession}
+          initialGoalId={sessionForGoal === 'freeform' ? null : sessionForGoal.id}
+          onStart={startSession}
+          onComplete={completeSession}
+          onCancel={cancelSession}
+          onEndNow={endNowSession}
         />
       )}
 

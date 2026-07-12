@@ -10,6 +10,8 @@ export interface Course {
   createdAt: Timestamp | null
 }
 
+export type GoalUnit = 'count' | 'minutes'
+
 export interface Goal {
   id: string
   courseId: string
@@ -18,6 +20,9 @@ export interface Goal {
   period: PeriodKind
   active: boolean
   createdAt: Timestamp | null
+  // Absent on legacy goals — treated as 'count'. When 'minutes', target and
+  // entry amounts are stored as whole minutes; UI shows hours/minutes.
+  unit?: GoalUnit
 }
 
 export interface Entry {
@@ -90,6 +95,39 @@ export const QUESTION_STATUS_ORDER: QuestionStatus[] = [
   'retry',
   'unanswered'
 ]
+
+export type TimedOutcome = 'running' | 'completed' | 'canceled'
+
+export interface Session {
+  id: string
+  courseId: string
+  goalId: string | null
+  plannedMinutes: number
+  startedAt: Timestamp | null
+  endedAt: Timestamp | null
+  outcome: TimedOutcome
+  loggedMinutes: number | null
+  entryId: string | null
+}
+
+export interface Break {
+  id: string
+  plannedMinutes: number
+  startedAt: Timestamp | null
+  endedAt: Timestamp | null
+  outcome: TimedOutcome
+}
+
+export interface PlannedBlock {
+  id: string
+  courseId: string
+  title: string
+  startAt: Timestamp
+  endAt: Timestamp
+  notes?: string
+  calendarEventId?: string
+  createdAt: Timestamp | null
+}
 
 export interface HistoryRecord {
   id: string

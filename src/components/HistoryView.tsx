@@ -1,5 +1,6 @@
 import type { Course, HistoryRecord } from '../types'
 import { Dialog } from './ui/Dialog'
+import { formatDuration } from '../lib/time'
 
 interface Props {
   open: boolean
@@ -54,7 +55,9 @@ export function HistoryView({ open, onClose, history, courses }: Props) {
                               {h.period} · {h.periodKey}
                             </div>
                             <div>
-                              {h.achieved} / {h.target} {h.metric}
+                              {h.metric === 'minutes'
+                                ? `${formatDuration(h.achieved)} / ${formatDuration(h.target)} studied`
+                                : `${h.achieved} / ${h.target} ${h.metric}`}
                             </div>
                           </div>
                           <div

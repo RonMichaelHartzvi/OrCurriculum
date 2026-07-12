@@ -11,7 +11,7 @@ import {
   where
 } from 'firebase/firestore'
 import { db } from '../firebase'
-import type { Goal, PeriodKind } from '../types'
+import type { Goal, GoalUnit, PeriodKind } from '../types'
 
 export function useGoals(uid: string | null) {
   const [goals, setGoals] = useState<Goal[]>([])
@@ -36,10 +36,12 @@ export function useGoals(uid: string | null) {
     metric: string
     target: number
     period: PeriodKind
+    unit?: GoalUnit
   }) {
     if (!uid) return
     await addDoc(collection(db, 'users', uid, 'goals'), {
       ...input,
+      unit: input.unit ?? 'count',
       active: true,
       createdAt: serverTimestamp()
     })

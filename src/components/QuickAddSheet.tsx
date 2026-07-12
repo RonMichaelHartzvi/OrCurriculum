@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Dialog } from './ui/Dialog'
 import type { Goal } from '../types'
+import { formatDuration } from '../lib/time'
 
 interface Props {
   open: boolean
@@ -30,18 +31,28 @@ export function QuickAddSheet({ open, onClose, goal, courseName, progress, onLog
     }
   }
 
+  const isTime = goal.unit === 'minutes'
   const remaining = Math.max(goal.target - progress, 0)
+  const presets = isTime ? [15, 30, 60, 90] : [1, 2, 5, 10]
+  const unitLabel = isTime ? 'min' : ''
+
+  const displayProgress = isTime ? formatDuration(progress) : `${progress}`
+  const displayTarget = isTime ? formatDuration(goal.target) : `${goal.target}`
+  const displayMetric = isTime ? 'studied' : goal.metric
 
   return (
-    <Dialog open={open} onClose={onClose} title={`Log ${goal.metric}`}>
+    <Dialog open={open} onClose={onClose} title={isTime ? 'Log study time' : `Log ${goal.metric}`}>
       <div className="space-y-4">
         <div className="text-sm text-berry/80">
-          <span className="font-semibold">{courseName}</span> — {progress} of {goal.target}{' '}
-          {goal.metric} done. {remaining > 0 ? `${remaining} to go!` : 'Goal met — keep going 💗'}
+          <span className="font-semibold">{courseName}</span> — {displayProgress} of {displayTarget}{' '}
+          {displayMetric}.{' '}
+          {remaining > 0
+            ? `${isTime ? formatDuration(remaining) : remaining} to go!`
+            : 'Goal met — keep going 💗'}
         </div>
 
         <div className="grid grid-cols-4 gap-2">
-          {[1, 2, 5, 10].map((n) => (
+          {presets.map((n) => (
             <button
               key={n}
               className="btn-soft text-lg py-3 flex-col leading-tight"
@@ -49,6 +60,7 @@ export function QuickAddSheet({ open, onClose, goal, courseName, progress, onLog
               disabled={busy}
             >
               +{n}
+              {unitLabel && <span className="text-xs opacity-70">{unitLabel}</span>}
             </button>
           ))}
         </div>
@@ -65,7 +77,7 @@ export function QuickAddSheet({ open, onClose, goal, courseName, progress, onLog
             className="input flex-1"
             type="number"
             min={1}
-            placeholder="Custom amount"
+            placeholder={isTime ? 'Custom minutes' : 'Custom amount'}
             value={custom}
             onChange={(e) => setCustom(e.target.value)}
           />
