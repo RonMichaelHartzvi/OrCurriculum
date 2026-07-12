@@ -24,7 +24,12 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
-        navigateFallbackDenylist: [/^\/__/]
+        navigateFallbackDenylist: [/^\/__/],
+        // Take over from any previous SW immediately so users don't stay on
+        // an old shell after a deploy.
+        skipWaiting: true,
+        clientsClaim: true,
+        cleanupOutdatedCaches: true
       }
     })
   ]
