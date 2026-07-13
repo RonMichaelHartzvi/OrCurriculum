@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import type { Course, Entry, Goal, GoalUnit, PeriodKind } from '../types'
 import { RingProgress } from './RingProgress'
@@ -7,6 +7,12 @@ import { GoalFormDialog } from './GoalFormDialog'
 import { formatPeriodRange } from '../lib/periods'
 import { formatDuration } from '../lib/time'
 import { computeProgress } from '../lib/progress'
+
+interface LogGroup {
+  unit: GoalUnit
+  metric: string
+  goals: Goal[]
+}
 
 interface Props {
   course: Course
@@ -33,7 +39,7 @@ export function CourseCard({
   openTaskCount
 }: Props) {
   const [showGoalForm, setShowGoalForm] = useState(false)
-  const [logGoal, setLogGoal] = useState<Goal | null>(null)
+  const [logGroup, setLogGroup] = useState<LogGroup | null>(null)
 
   const progressFor = (goal: Goal) => computeProgress(goal, entries)
 
@@ -41,6 +47,23 @@ export function CourseCard({
     e.stopPropagation()
     fn()
   }
+
+  // Dedupe goals into one +Log per unique metric — a course with weekly+daily
+  // time goals should show ONE "+ Log study time", not one button per goal.
+  const logGroups = useMemo<LogGroup[]>(() => {
+    const map = new Map<string, LogGroup>()
+    for (const g of goals) {
+      const unit: GoalUnit = g.unit ?? 'count'
+      const key = `${unit}|${g.metric}`
+      let group = map.get(key)
+      if (!group) {
+        group = { unit, metric: g.metric, goals: [] }
+        map.set(key, group)
+      }
+      group.goals.push(g)
+    }
+    return Array.from(map.values())
+  }, [goals])
 
   return (
     <motion.div
@@ -115,18 +138,25 @@ export function CourseCard({
                       {formatPeriodRange(g.period)}
                     </span>
                   </div>
-                  <div className="mt-2 flex gap-2 flex-wrap">
-                    <button
-                      className="btn-primary text-sm"
-                      onClick={stop(() => setLogGoal(g))}
-                    >
-                      + Log
-                    </button>
-                  </div>
                 </div>
               </div>
             )
           })}
+          <div className="flex flex-wrap gap-2">
+            {logGroups.map((group) => {
+              const label =
+                group.unit === 'minutes' ? 'study time' : group.metric
+              return (
+                <button
+                  key={`${group.unit}|${group.metric}`}
+                  className="btn-primary text-sm"
+                  onClick={stop(() => setLogGroup(group))}
+                >
+                  + Log {label}
+                </button>
+              )
+            })}
+          </div>
         </div>
       )}
 
@@ -137,14 +167,26 @@ export function CourseCard({
         onSave={onAddGoal}
       />
 
-      {logGoal && (
+      {logGroup && (
         <QuickAddSheet
-          open={!!logGoal}
-          onClose={() => setLogGoal(null)}
-          goal={logGoal}
+          open={!!logGroup}
+          onClose={() => setLogGroup(null)}
+          goal={logGroup.goals[0]}
           courseName={course.name}
-          progress={progressFor(logGoal)}
-          onLog={(amount) => onLog(logGoal, amount)}
+          progress={progressFor(logGroup.goals[0])}
+          onLog={async (amount) => {
+            if (logGroup.unit === 'minutes') {
+              // Time progress is pooled — one entry credits every time goal
+              // in the current period.
+              await onLog(logGroup.goals[0], amount)
+            } else {
+              // Count progress is per-goal, so credit each goal in the group
+              // (e.g. both weekly and daily of the same metric).
+              for (const g of logGroup.goals) {
+                await onLog(g, amount)
+              }
+            }
+          }}
         />
       )}
     </motion.div>
