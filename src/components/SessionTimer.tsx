@@ -54,6 +54,7 @@ export function SessionTimer({
   const [now, setNow] = useState<number>(Date.now())
   const [askConfirm, setAskConfirm] = useState<Session | null>(null)
   const [logAmount, setLogAmount] = useState<number>(0)
+  const [starting, setStarting] = useState(false)
 
   const isActiveForThisCourse = active && active.courseId === course.id
 
@@ -90,13 +91,28 @@ export function SessionTimer({
   const linkedGoal = goals.find((g) => g.id === goalId) ?? null
 
   async function handleStart() {
-    await primeAudio()
-    await requestNotificationPermission()
-    await onStart({
-      courseId: course.id,
-      goalId,
-      plannedMinutes: minutes
-    })
+    if (starting) return
+    setStarting(true)
+    // Priming audio + asking for notification permission must never block the
+    // session from starting. Both are best-effort — the timer works without
+    // them; only the alarm chime and OS notification degrade if denied.
+    try {
+      primeAudio()
+    } catch {
+      /* ignore */
+    }
+    void requestNotificationPermission().catch(() => {})
+    try {
+      await onStart({
+        courseId: course.id,
+        goalId,
+        plannedMinutes: minutes
+      })
+    } catch (err) {
+      console.error('Failed to start session:', err)
+    } finally {
+      setStarting(false)
+    }
   }
 
   async function handleConfirm() {
@@ -268,10 +284,10 @@ export function SessionTimer({
           <button
             type="button"
             className="btn-primary"
-            disabled={Boolean(active && active.courseId !== course.id)}
+            disabled={starting || Boolean(active && active.courseId !== course.id)}
             onClick={handleStart}
           >
-            Start {formatDuration(minutes)}
+            {starting ? 'Starting…' : `Start ${formatDuration(minutes)}`}
           </button>
         </div>
       </div>
