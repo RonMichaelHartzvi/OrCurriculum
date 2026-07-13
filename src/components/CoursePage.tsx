@@ -20,7 +20,13 @@ import { GoalFormDialog } from './GoalFormDialog'
 import { TaskList } from './TaskList'
 import { SessionTimer } from './SessionTimer'
 import { DayPlan } from './DayPlan'
-import type { Goal, PeriodKind } from '../types'
+import type { Goal, GoalUnit, PeriodKind } from '../types'
+
+interface LogGroup {
+  unit: GoalUnit
+  metric: string
+  goals: Goal[]
+}
 
 interface Props {
   user: User
@@ -47,7 +53,7 @@ export function CoursePage({ user, courseId }: Props) {
   const [showEditCourse, setShowEditCourse] = useState(false)
   const [showNewGoal, setShowNewGoal] = useState(false)
   const [editingGoal, setEditingGoal] = useState<Goal | null>(null)
-  const [logGoal, setLogGoal] = useState<Goal | null>(null)
+  const [logGroup, setLogGroup] = useState<LogGroup | null>(null)
   const [sessionForGoal, setSessionForGoal] = useState<Goal | null | 'freeform'>(null)
 
   const {
@@ -80,6 +86,25 @@ export function CoursePage({ user, courseId }: Props) {
         .sort((a, b) => (b.periodEnd?.toMillis() ?? 0) - (a.periodEnd?.toMillis() ?? 0)),
     [history, courseId]
   )
+
+  // Dedupe goals into one row of log/session actions per unique metric.
+  // A course with weekly+daily time goals should show ONE "+ Log study time"
+  // and ONE "▶ Start session" — not one per goal.
+  const logGroups = useMemo<LogGroup[]>(() => {
+    const map = new Map<string, LogGroup>()
+    for (const g of courseGoals) {
+      const unit: GoalUnit = g.unit ?? 'count'
+      const key = `${unit}|${g.metric}`
+      let group = map.get(key)
+      if (!group) {
+        group = { unit, metric: g.metric, goals: [] }
+        map.set(key, group)
+      }
+      group.goals.push(g)
+    }
+    return Array.from(map.values())
+  }, [courseGoals])
+  const hasTimeGoal = logGroups.some((g) => g.unit === 'minutes')
 
   useEffect(() => {
     if (courseGoals.length) {
@@ -160,61 +185,75 @@ export function CoursePage({ user, courseId }: Props) {
               No goals yet. Tap “Add goal” to set a target.
             </div>
           ) : (
-            <div className="space-y-5">
-              {courseGoals.map((g) => {
-                const p = progressFor(g)
-                const isTime = g.unit === 'minutes'
-                const ringLabel = isTime
-                  ? `${formatDuration(p)} / ${formatDuration(g.target)}`
-                  : `${p} / ${g.target}`
-                const ringSublabel = isTime ? 'study time' : g.metric
-                return (
-                  <motion.div
-                    key={g.id}
-                    layout
-                    className="flex items-center gap-5 rounded-3xl bg-blush/50 p-4"
+            <>
+              <div className="mb-5 flex flex-wrap gap-2">
+                {logGroups.map((group) => {
+                  const label =
+                    group.unit === 'minutes' ? 'study time' : group.metric
+                  return (
+                    <button
+                      key={`${group.unit}|${group.metric}`}
+                      className="btn-primary text-sm"
+                      onClick={() => setLogGroup(group)}
+                    >
+                      + Log {label}
+                    </button>
+                  )
+                })}
+                {hasTimeGoal && (
+                  <button
+                    className="btn-soft text-sm"
+                    onClick={() => setSessionForGoal('freeform')}
+                    disabled={Boolean(activeSession && activeSession.courseId !== courseId)}
                   >
-                    <RingProgress
-                      value={p}
-                      target={g.target}
-                      color={course.color}
-                      size={124}
-                      strokeWidth={12}
-                      label={ringLabel}
-                      sublabel={ringSublabel}
-                    />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="chip capitalize">{g.period}</span>
-                        <span className="text-xs text-berry/60">
-                          {formatPeriodRange(g.period)}
-                        </span>
-                      </div>
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        <button className="btn-primary text-sm" onClick={() => setLogGoal(g)}>
-                          + Log
-                        </button>
-                        {isTime && (
+                    ▶ Start session
+                  </button>
+                )}
+              </div>
+              <div className="space-y-5">
+                {courseGoals.map((g) => {
+                  const p = progressFor(g)
+                  const isTime = g.unit === 'minutes'
+                  const ringLabel = isTime
+                    ? `${formatDuration(p)} / ${formatDuration(g.target)}`
+                    : `${p} / ${g.target}`
+                  const ringSublabel = isTime ? 'study time' : g.metric
+                  return (
+                    <motion.div
+                      key={g.id}
+                      layout
+                      className="flex items-center gap-5 rounded-3xl bg-blush/50 p-4"
+                    >
+                      <RingProgress
+                        value={p}
+                        target={g.target}
+                        color={course.color}
+                        size={124}
+                        strokeWidth={12}
+                        label={ringLabel}
+                        sublabel={ringSublabel}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="chip capitalize">{g.period}</span>
+                          <span className="text-xs text-berry/60">
+                            {formatPeriodRange(g.period)}
+                          </span>
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-2">
                           <button
                             className="btn-soft text-sm"
-                            onClick={() => setSessionForGoal(g)}
-                            disabled={Boolean(activeSession && activeSession.courseId !== courseId)}
+                            onClick={() => setEditingGoal(g)}
                           >
-                            ▶ Start session
+                            Edit
                           </button>
-                        )}
-                        <button
-                          className="btn-soft text-sm"
-                          onClick={() => setEditingGoal(g)}
-                        >
-                          Edit
-                        </button>
+                        </div>
                       </div>
-                    </div>
-                  </motion.div>
-                )
-              })}
-            </div>
+                    </motion.div>
+                  )
+                })}
+              </div>
+            </>
           )}
         </section>
 
@@ -223,15 +262,6 @@ export function CoursePage({ user, courseId }: Props) {
           <SectionHeader
             title="Day plan"
             subtitle="Time blocks for today. Push them to Google Calendar if you like."
-            action={
-              <button
-                className="btn-soft text-sm"
-                onClick={() => setSessionForGoal('freeform')}
-                disabled={Boolean(activeSession && activeSession.courseId !== courseId)}
-              >
-                ▶ Quick session
-              </button>
-            }
           />
           <DayPlan
             courses={courses}
@@ -363,22 +393,40 @@ export function CoursePage({ user, courseId }: Props) {
         />
       )}
 
-      {logGoal && (
+      {logGroup && (
         <QuickAddSheet
-          open={!!logGoal}
-          onClose={() => setLogGoal(null)}
-          goal={logGoal}
+          open={!!logGroup}
+          onClose={() => setLogGroup(null)}
+          goal={logGroup.goals[0]}
           courseName={course.name}
-          progress={progressFor(logGoal)}
-          onLog={(amount) =>
-            addEntry({
-              courseId: logGoal.courseId,
-              goalId: logGoal.id,
-              metric: logGoal.metric,
-              amount,
-              periodKey: periodKey(logGoal.period as PeriodKind)
-            })
-          }
+          progress={progressFor(logGroup.goals[0])}
+          onLog={async (amount) => {
+            if (logGroup.unit === 'minutes') {
+              // Time progress is pooled across the course — one entry credits
+              // every time goal in the current period.
+              const g = logGroup.goals[0]
+              await addEntry({
+                courseId: g.courseId,
+                goalId: g.id,
+                metric: g.metric,
+                amount,
+                periodKey: periodKey(g.period as PeriodKind)
+              })
+            } else {
+              // Count progress is per-goal, so we write one entry per goal in
+              // the group so both weekly and daily goals of the same metric
+              // get credit.
+              for (const g of logGroup.goals) {
+                await addEntry({
+                  courseId: g.courseId,
+                  goalId: g.id,
+                  metric: g.metric,
+                  amount,
+                  periodKey: periodKey(g.period as PeriodKind)
+                })
+              }
+            }
+          }}
         />
       )}
     </div>
