@@ -3,6 +3,11 @@ import { useEffect, useRef } from 'react'
 const CHIME_URL = '/chime.mp3'
 
 let chimeEl: HTMLAudioElement | null = null
+// Monotonic token used to detect when stopAlarm() has been called after a
+// fireAlarm() that's still awaiting play(). Any resolved play() whose token
+// doesn't match the current one immediately re-pauses so we can't be left
+// with audio playing after the user acknowledged.
+let alarmToken = 0
 
 function getChime(): HTMLAudioElement | null {
   if (typeof window === 'undefined') return null
@@ -47,6 +52,7 @@ export interface AlarmPayload {
 }
 
 export function stopAlarm(): void {
+  alarmToken++
   const el = chimeEl
   if (!el) return
   try {
@@ -61,9 +67,20 @@ export async function fireAlarm({ title, body, silent }: AlarmPayload): Promise<
   if (!silent) {
     const el = getChime()
     if (el) {
+      const token = ++alarmToken
       try {
         el.currentTime = 0
         await el.play().catch(() => {})
+        // If stopAlarm was called while play() was in flight, immediately
+        // pause the audio that the browser eventually started.
+        if (token !== alarmToken) {
+          try {
+            el.pause()
+            el.currentTime = 0
+          } catch {
+            /* ignore */
+          }
+        }
       } catch {
         /* audio failure is non-fatal */
       }
