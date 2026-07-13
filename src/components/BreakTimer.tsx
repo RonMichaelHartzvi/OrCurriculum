@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Dialog } from './ui/Dialog'
 import { RingProgress } from './RingProgress'
@@ -25,12 +25,11 @@ function breakElapsedMinutes(brk: Break, now: number): number {
 }
 
 export function BreakFab({ uid }: Props) {
-  const { active, startBreak, endBreak } = useBreak(uid)
+  const { active, startBreak, endBreak, markAlarmed } = useBreak(uid)
   const [open, setOpen] = useState(false)
   const [minutes, setMinutes] = useState<number>(15)
   const [customMin, setCustomMin] = useState<string>('')
   const [now, setNow] = useState<number>(Date.now())
-  const [alarmed, setAlarmed] = useState(false)
 
   useWakeLock(Boolean(active))
 
@@ -40,21 +39,30 @@ export function BreakFab({ uid }: Props) {
     return () => window.clearInterval(id)
   }, [active])
 
+  // `alarmedAt` is stored on the break doc so this survives BreakFab
+  // unmount/remount (e.g. navigating Dashboard → CoursePage → Dashboard).
+  const alarmed = Boolean(active?.alarmedAt)
+  // Synchronous guard: markAlarmed's Firestore write is async, so `alarmed`
+  // stays false until the snapshot returns (~200 ms). Without this ref the
+  // next `now` tick re-runs the effect and fires the chime a second time.
+  const firedForBreakIdRef = useRef<string | null>(null)
+
   useEffect(() => {
     if (!active) {
-      setAlarmed(false)
+      firedForBreakIdRef.current = null
       return
     }
-    if (alarmed) return
+    if (alarmed || firedForBreakIdRef.current === active.id) return
     const remaining = active.plannedMinutes - breakElapsedMinutes(active, now)
     if (remaining <= 0) {
-      setAlarmed(true)
+      firedForBreakIdRef.current = active.id
       fireAlarm({
         title: 'Break over 💗',
         body: 'Time to come back to study.'
       })
+      markAlarmed(active).catch(() => {})
     }
-  }, [active, now, alarmed])
+  }, [active, now, alarmed, markAlarmed])
 
   async function handleStart() {
     await primeAudio()

@@ -15,7 +15,8 @@ export function SessionBanner({ user }: { user: User }) {
     startSession,
     completeSession,
     cancelSession,
-    endNow
+    endNow,
+    markAlarmed
   } = useSession(uid)
   const { courses } = useCourses(uid)
   const { goals } = useGoals(uid)
@@ -39,10 +40,14 @@ export function SessionBanner({ user }: { user: User }) {
   )
 
   // Fire the alarm exactly once per session and auto-open the SessionTimer so
-  // the user sees the log-confirm dialog. Guarded by session id so the effect
-  // is idempotent across re-renders / clock ticks.
+  // the user sees the log-confirm dialog. Two-layer guard:
+  //  - `alarmedForSessionId` ref: synchronous, protects the intra-write window
+  //    (would otherwise re-fire on the next `now` tick before Firestore returns).
+  //  - `active.alarmedAt` on the doc: persisted, so a page reload / sign-out
+  //    remount on an over-elapsed running session doesn't blast the chime again.
   useEffect(() => {
     if (!active || active.outcome !== 'running') return
+    if (active.alarmedAt) return
     if (alarmedForSessionId.current === active.id) return
     const elapsed = sessionElapsedMinutes(active, now)
     if (elapsed >= active.plannedMinutes) {
@@ -53,9 +58,10 @@ export function SessionBanner({ user }: { user: User }) {
           ? `Your ${course.name} session is complete.`
           : 'Your study session is complete.'
       })
+      markAlarmed(active).catch(() => {})
       setOpen(true)
     }
-  }, [active, now, course])
+  }, [active, now, course, markAlarmed])
 
   const elapsed = active ? sessionElapsedMinutes(active, now) : 0
   const totalRemainingSeconds = active

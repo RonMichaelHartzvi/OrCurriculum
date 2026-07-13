@@ -59,5 +59,12 @@ export function useBreak(uid: string | null) {
     })
   }
 
-  return { active, loading, startBreak, endBreak }
+  async function markAlarmed(brk: Break): Promise<void> {
+    if (!uid) return
+    await updateDoc(doc(db, 'users', uid, 'breaks', brk.id), {
+      alarmedAt: serverTimestamp()
+    })
+  }
+
+  return { active, loading, startBreak, endBreak, markAlarmed }
 }
