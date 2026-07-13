@@ -6,9 +6,15 @@ interface DialogProps {
   onClose: () => void
   title: string
   children: ReactNode
+  size?: 'md' | 'lg'
 }
 
-export function Dialog({ open, onClose, title, children }: DialogProps) {
+const SIZE_CLASS: Record<NonNullable<DialogProps['size']>, string> = {
+  md: 'max-w-md',
+  lg: 'max-w-lg'
+}
+
+export function Dialog({ open, onClose, title, children, size = 'md' }: DialogProps) {
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
@@ -28,7 +34,7 @@ export function Dialog({ open, onClose, title, children }: DialogProps) {
         >
           <div className="min-h-full flex items-end sm:items-center justify-center p-3 sm:p-6">
             <motion.div
-              className="card w-full max-w-md p-6"
+              className={`card w-full ${SIZE_CLASS[size]} p-6`}
               initial={{ y: 40, opacity: 0, scale: 0.98 }}
               animate={{ y: 0, opacity: 1, scale: 1 }}
               exit={{ y: 30, opacity: 0, scale: 0.98 }}

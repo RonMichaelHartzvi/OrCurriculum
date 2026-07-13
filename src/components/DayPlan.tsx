@@ -428,7 +428,7 @@ function BlockFormDialog({
   }
 
   return (
-    <Dialog open={open} onClose={onClose} title={initial ? 'Edit block' : 'New block'}>
+    <Dialog open={open} onClose={onClose} title={initial ? 'Edit block' : 'New block'} size="lg">
       <form onSubmit={submit} className="space-y-4">
         {!lockCourseId && (
           <div>
@@ -465,7 +465,7 @@ function BlockFormDialog({
             required
           />
         </div>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <div>
             <label className="text-xs font-semibold text-berry/80 uppercase tracking-wide">
               Start
