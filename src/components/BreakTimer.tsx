@@ -31,7 +31,10 @@ export function BreakFab({ uid }: Props) {
   const [customMin, setCustomMin] = useState<string>('')
   const [now, setNow] = useState<number>(Date.now())
 
-  useWakeLock(Boolean(active))
+  // Hold the screen awake only while the break is still counting down.
+  // Once the chime has fired (`alarmedAt` set) we release, so a stale
+  // running break doesn't pin the display on until it's manually ended.
+  useWakeLock(Boolean(active && !active.alarmedAt))
 
   useEffect(() => {
     if (!active) return

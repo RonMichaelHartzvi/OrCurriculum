@@ -54,7 +54,11 @@ export function SessionTimer({
 
   const isActiveForThisCourse = active && active.courseId === course.id
 
-  useWakeLock(Boolean(isActiveForThisCourse))
+  // Hold the screen awake only during the countdown. Once the chime has
+  // fired (`alarmedAt` set) the user has been nudged, so we release the
+  // wake lock even if they haven't yet Log'd or Discarded — otherwise a
+  // forgotten stale session pins the display on indefinitely.
+  useWakeLock(Boolean(isActiveForThisCourse && !active?.alarmedAt))
 
   useEffect(() => {
     if (!open) return
