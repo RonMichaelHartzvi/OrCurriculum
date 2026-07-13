@@ -4,13 +4,14 @@ import { auth } from '../firebase'
 import { useCourses } from '../hooks/useCourses'
 import { useGoals } from '../hooks/useGoals'
 import { useEntries } from '../hooks/useEntries'
-import { useHistory } from '../hooks/useHistory'
 import { useTasks } from '../hooks/useTasks'
+import { useSessions } from '../hooks/useSessions'
 import { openCourse, openPlan, openTime } from '../hooks/useRoute'
 import { archivePastPeriods } from '../lib/archive'
 import { CourseCard } from './CourseCard'
 import { CourseFormDialog } from './CourseFormDialog'
 import { HistoryView } from './HistoryView'
+import { ConfirmDialog } from './ui/ConfirmDialog'
 import { BreakFab } from './BreakTimer'
 import { periodKey } from '../lib/periods'
 import type { Goal, PeriodKind } from '../types'
@@ -21,11 +22,12 @@ export function Dashboard({ user }: { user: User }) {
   const { courses, addCourse } = useCourses(uid)
   const { goals, addGoal } = useGoals(uid)
   const { entries, addEntry } = useEntries(uid)
-  const { history } = useHistory(uid)
   const { tasks } = useTasks(uid)
+  const { all: sessions, discardSession, discardEntry } = useSessions(uid)
 
   const [showNewCourse, setShowNewCourse] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
+  const [confirmSignOut, setConfirmSignOut] = useState(false)
 
   useEffect(() => {
     if (goals.length) archivePastPeriods(uid, goals).catch((e) => console.warn('archive:', e))
@@ -70,7 +72,7 @@ export function Dashboard({ user }: { user: User }) {
         <button className="btn-ghost" onClick={() => setShowHistory(true)}>
           History
         </button>
-        <button className="btn-ghost" onClick={() => signOut(auth)}>
+        <button className="btn-ghost" onClick={() => setConfirmSignOut(true)}>
           Sign out
         </button>
       </header>
@@ -139,8 +141,21 @@ export function Dashboard({ user }: { user: User }) {
       <HistoryView
         open={showHistory}
         onClose={() => setShowHistory(false)}
-        history={history}
         courses={courses}
+        sessions={sessions}
+        entries={entries}
+        onDiscardSession={discardSession}
+        onDiscardEntry={discardEntry}
+      />
+
+      <ConfirmDialog
+        open={confirmSignOut}
+        onClose={() => setConfirmSignOut(false)}
+        onConfirm={() => signOut(auth)}
+        title="Sign out?"
+        confirmLabel="Sign out"
+        danger
+        message="You'll need to sign in again to access your courses and goals."
       />
     </div>
   )
