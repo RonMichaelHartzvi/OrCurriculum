@@ -3,12 +3,7 @@ import { Dialog } from './ui/Dialog'
 import { RingProgress } from './RingProgress'
 import type { Course, Goal, Session } from '../types'
 import { formatDuration, sessionElapsedMinutes, sessionRemainingMinutes } from '../lib/time'
-import {
-  fireAlarm,
-  primeAudio,
-  requestNotificationPermission,
-  useWakeLock
-} from '../lib/alarm'
+import { primeAudio, requestNotificationPermission, useWakeLock } from '../lib/alarm'
 
 const DURATION_PRESETS = [25, 45, 60, 90, 120]
 
@@ -74,20 +69,19 @@ export function SessionTimer({
     return () => window.clearInterval(id)
   }, [isActiveForThisCourse])
 
-  // When the session hits zero, fire the alarm once and switch to the confirm step.
+  // When the session hits zero, switch to the confirm step. The chime + OS
+  // notification are fired by SessionBanner (which is always mounted); we only
+  // handle the log-confirm UI here, so an unmounted SessionTimer never misses
+  // firing the alarm.
   useEffect(() => {
     if (!active || active.courseId !== course.id) return
     if (askConfirm) return
     const remaining = sessionRemainingMinutes(active, now)
     if (remaining <= 0 && active.outcome === 'running') {
-      fireAlarm({
-        title: "Time's up! 🌸",
-        body: `Your ${course.name} session is complete.`
-      })
       setAskConfirm(active)
       setLogAmount(active.plannedMinutes)
     }
-  }, [active, course.id, course.name, now, askConfirm])
+  }, [active, course.id, now, askConfirm])
 
   const linkedGoal = goals.find((g) => g.id === goalId) ?? null
 

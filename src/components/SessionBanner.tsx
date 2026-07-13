@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import type { User } from 'firebase/auth'
 import { useSession } from '../hooks/useSession'
 import { useCourses } from '../hooks/useCourses'
 import { useGoals } from '../hooks/useGoals'
 import { sessionElapsedMinutes } from '../lib/time'
+import { fireAlarm } from '../lib/alarm'
 import { SessionTimer } from './SessionTimer'
 
 export function SessionBanner({ user }: { user: User }) {
@@ -20,10 +21,12 @@ export function SessionBanner({ user }: { user: User }) {
   const { goals } = useGoals(uid)
   const [now, setNow] = useState<number>(Date.now())
   const [open, setOpen] = useState(false)
+  const alarmedForSessionId = useRef<string | null>(null)
 
   useEffect(() => {
     if (!active) {
       setOpen(false)
+      alarmedForSessionId.current = null
       return
     }
     const id = window.setInterval(() => setNow(Date.now()), 1000)
@@ -34,6 +37,25 @@ export function SessionBanner({ user }: { user: User }) {
     () => (active ? courses.find((c) => c.id === active.courseId) : undefined),
     [active, courses]
   )
+
+  // Fire the alarm exactly once per session and auto-open the SessionTimer so
+  // the user sees the log-confirm dialog. Guarded by session id so the effect
+  // is idempotent across re-renders / clock ticks.
+  useEffect(() => {
+    if (!active || active.outcome !== 'running') return
+    if (alarmedForSessionId.current === active.id) return
+    const elapsed = sessionElapsedMinutes(active, now)
+    if (elapsed >= active.plannedMinutes) {
+      alarmedForSessionId.current = active.id
+      fireAlarm({
+        title: "Time's up! 🌸",
+        body: course
+          ? `Your ${course.name} session is complete.`
+          : 'Your study session is complete.'
+      })
+      setOpen(true)
+    }
+  }, [active, now, course])
 
   const elapsed = active ? sessionElapsedMinutes(active, now) : 0
   const totalRemainingSeconds = active
