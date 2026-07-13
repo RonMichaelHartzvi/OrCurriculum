@@ -429,7 +429,7 @@ function BlockFormDialog({
 
   return (
     <Dialog open={open} onClose={onClose} title={initial ? 'Edit block' : 'New block'} size="lg">
-      <form onSubmit={submit} className="space-y-4">
+      <form onSubmit={submit} className="space-y-5">
         {!lockCourseId && (
           <div>
             <label className="text-xs font-semibold text-berry/80 uppercase tracking-wide">
@@ -496,7 +496,7 @@ function BlockFormDialog({
             Notes
           </label>
           <textarea
-            className="input mt-1 min-h-[60px]"
+            className="input mt-1 min-h-[120px]"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
           />
