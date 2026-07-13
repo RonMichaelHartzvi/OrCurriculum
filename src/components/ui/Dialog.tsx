@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { type ReactNode, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 
 interface DialogProps {
   open: boolean
@@ -22,7 +23,14 @@ export function Dialog({ open, onClose, title, children, size = 'md' }: DialogPr
     return () => window.removeEventListener('keydown', onKey)
   }, [open, onClose])
 
-  return (
+  if (typeof document === 'undefined') return null
+
+  // Portal to document.body so ancestor `backdrop-filter` / `transform` /
+  // `filter` styles (like the .card class's backdrop-blur, or Framer Motion's
+  // transforms) don't turn the overlay's `position: fixed` into a containing
+  // block relative to that ancestor. Without this, a Dialog rendered inside a
+  // .card gets sized to the card instead of the viewport.
+  return createPortal(
     <AnimatePresence>
       {open && (
         <motion.div
@@ -56,6 +64,7 @@ export function Dialog({ open, onClose, title, children, size = 'md' }: DialogPr
           </div>
         </motion.div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   )
 }
