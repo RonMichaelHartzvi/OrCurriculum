@@ -129,6 +129,10 @@ export function SessionTimer({
 
   async function handleCancel() {
     if (!active) return
+    const ok = confirm(
+      'Discard this session? Your study time will not be recorded toward any goal.'
+    )
+    if (!ok) return
     await onCancel(active)
     onClose()
   }
@@ -164,6 +168,10 @@ export function SessionTimer({
             <button
               className="btn-ghost text-berry/70"
               onClick={async () => {
+                const ok = confirm(
+                  'Discard this session? Your study time will not be recorded toward any goal.'
+                )
+                if (!ok) return
                 stopAlarm()
                 await onCancel(askConfirm)
                 setAskConfirm(null)
@@ -205,7 +213,7 @@ export function SessionTimer({
           />
           <div className="flex flex-wrap justify-center gap-2 w-full">
             <button className="btn-soft" onClick={handleCancel}>
-              Cancel
+              Discard
             </button>
             <button className="btn-primary" onClick={handleEndNow}>
               End now & log
