@@ -104,7 +104,14 @@ When creating a new practice test on a course, `TaskList` defaults the question 
 
 ### Progress calculation
 
-Live "progress toward this goal" = **sum of `amount` on entries where `goalId === g.id` and `periodKey === periodKey(g.period)`**. Done in `CourseCard.tsx#progressFor` (duplicated in `CoursePage.tsx#progressFor` — keep in sync). No counters, no race conditions, idempotent. For time-based goals the same math applies — `amount` is minutes, the UI just formats it as `Xh Ym` via `formatDuration()` in `src/lib/time.ts`.
+Single source of truth: `computeProgress(goal, entries)` in `src/lib/progress.ts`, used by both `CourseCard.tsx` and `CoursePage.tsx`.
+
+- **Count goals**: sum of `amount` on entries where `goalId === g.id` and `periodKey === periodKey(g.period)`. Per-goal, per-metric.
+- **Time goals** (`unit === 'minutes'`): sum of `amount` on entries where `courseId === g.courseId`, `metric === 'minutes'`, and `entry.at` falls within `[periodStart(g.period), periodEnd(g.period)]`. **Pooled across the course** — a session credits every active time goal in that course/period, and a time goal created mid-period picks up minutes already logged. `entry.periodKey` is ignored for time goals because a daily entry may need to count toward a weekly goal (and vice versa).
+
+No counters, no race conditions, idempotent. UI formats minute amounts via `formatDuration()` in `src/lib/time.ts`.
+
+**Archival caveat**: `archivePastPeriods` still groups by `goalId`, so history records for time goals only reflect entries tagged with that specific goal — historical pooling is not yet in sync with the live pooling above.
 
 ### Auto-archive on load
 
@@ -370,7 +377,7 @@ Firebase web-config keys are technically identifiers, not secrets — but keepin
 | Task                                        | Files                                                        |
 | ------------------------------------------- | ------------------------------------------------------------ |
 | Add a new field on a course/goal/entry/task | `src/types.ts` → the relevant hook in `src/hooks/` → the form dialog |
-| Change how progress is calculated            | `progressFor` in both `CourseCard.tsx` and `CoursePage.tsx` (duplicated — keep them in sync) |
+| Change how progress is calculated            | `computeProgress` in `src/lib/progress.ts` (used by `CourseCard.tsx` and `CoursePage.tsx`) |
 | Change week start (Sun → Mon)                | `startOfWeek` in `src/lib/periods.ts`                        |
 | Add a new period kind (e.g. monthly)         | `PeriodKind` in `types.ts`, then `lib/periods.ts` functions, then goal-form UI |
 | Add a new time-goal preset (session/break)   | `DURATION_PRESETS` in `SessionTimer.tsx` or `BREAK_PRESETS` in `BreakTimer.tsx` |

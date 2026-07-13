@@ -12,6 +12,7 @@ import { openDashboard } from '../hooks/useRoute'
 import { archivePastPeriods } from '../lib/archive'
 import { formatPeriodRange, periodKey } from '../lib/periods'
 import { formatDuration } from '../lib/time'
+import { computeProgress } from '../lib/progress'
 import { RingProgress } from './RingProgress'
 import { QuickAddSheet } from './QuickAddSheet'
 import { CourseFormDialog } from './CourseFormDialog'
@@ -99,12 +100,7 @@ export function CoursePage({ user, courseId }: Props) {
     )
   }
 
-  const progressFor = (g: Goal) => {
-    const key = periodKey(g.period)
-    return entries
-      .filter((e) => e.goalId === g.id && e.periodKey === key)
-      .reduce((s, e) => s + (e.amount || 0), 0)
-  }
+  const progressFor = (g: Goal) => computeProgress(g, entries)
 
   return (
     <div className="min-h-full pb-24">
