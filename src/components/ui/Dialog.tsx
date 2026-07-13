@@ -11,7 +11,7 @@ interface DialogProps {
 
 const SIZE_CLASS: Record<NonNullable<DialogProps['size']>, string> = {
   md: 'max-w-md',
-  lg: 'max-w-xl'
+  lg: 'max-w-2xl sm:min-h-[75vh]'
 }
 
 export function Dialog({ open, onClose, title, children, size = 'md' }: DialogProps) {

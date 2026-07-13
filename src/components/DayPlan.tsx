@@ -496,7 +496,7 @@ function BlockFormDialog({
             Notes
           </label>
           <textarea
-            className="input mt-1 min-h-[120px]"
+            className="input mt-1 min-h-[120px] sm:min-h-[280px]"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
           />
