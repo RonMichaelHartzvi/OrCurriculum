@@ -158,7 +158,7 @@ Time-based goals reuse the same `entries` + `periodKey` model as count goals —
 - On start: session doc created with `startedAt: serverTimestamp()`. Component asks for notification permission and primes the audio element.
 - On end (timer reaches zero): `fireAlarm()` from `src/lib/alarm.ts` (browser Notification + audio chime + focus tab). A confirmation dialog opens; user confirms the minutes to log. Completion writes one `entries` doc and links its id back on the session.
 - "End now & log" credits the actual elapsed minutes (rounded). Cancel writes no entry.
-- The `useWakeLock` hook keeps the screen awake while a session runs; it re-acquires on `visibilitychange` because browsers drop the lock when the tab hides.
+- The `useWakeLock` hook keeps the screen awake while a session runs; it re-acquires on `visibilitychange` because browsers drop the lock when the tab hides. Sites gate on `active && !active.alarmedAt` — once the end-of-session/break chime has fired, the wake lock releases even if the user hasn't Log'd or Discarded, so a stale running session/break can't pin the display on.
 
 **Breaks** (`useBreak` + `BreakFab`): same lifecycle, no entry write. Break is top-level (not per course). The FAB lives on the dashboard bottom-left.
 
