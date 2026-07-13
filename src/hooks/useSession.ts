@@ -107,12 +107,20 @@ export function useSession(uid: string | null) {
     return completeSession(session, goal, elapsed)
   }
 
+  async function markAlarmed(session: Session): Promise<void> {
+    if (!uid) return
+    await updateDoc(doc(db, 'users', uid, 'sessions', session.id), {
+      alarmedAt: serverTimestamp()
+    })
+  }
+
   return {
     active,
     loading,
     startSession,
     completeSession,
     cancelSession,
-    endNow
+    endNow,
+    markAlarmed
   }
 }

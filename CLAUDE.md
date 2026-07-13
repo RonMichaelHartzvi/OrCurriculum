@@ -78,8 +78,8 @@ Everything is scoped under `users/{uid}`. The security rules in `firestore.rules
 | `users/{uid}/entries/{id}`       | `courseId`, `goalId`, `metric`, `amount`, `at` (serverTimestamp), `periodKey`            | `periodKey` is set at write time from the goal's period. |
 | `users/{uid}/tasks/{id}`         | `courseId`, `title`, `done`, `createdAt`, `completedAt`, plus optional `type: 'regular' \| 'practiceTest'`, `questionCount`, `questions: QuestionStatus[]` | Untimed to-dos, live under a course. Docs without a `type` field are treated as `regular` (backwards-compatible). Practice-test `done` is auto-derived — see below. |
 | `users/{uid}/goals/{id}` (added `unit`) | `unit?: 'count' | 'minutes'` — absent = `'count'` (backwards compat). Time goals store `target` in whole minutes and set `metric = 'minutes'`. |
-| `users/{uid}/sessions/{id}`      | `courseId`, `goalId` (nullable), `plannedMinutes`, `startedAt`, `endedAt`, `outcome: 'running'|'completed'|'canceled'`, `loggedMinutes`, `entryId` | Only one `outcome: 'running'` per user at a time — enforced in `useSession`, not in rules. Completing writes an `entries` doc and links it via `entryId`. |
-| `users/{uid}/breaks/{id}`        | `plannedMinutes`, `startedAt`, `endedAt`, `outcome` | Top-level (no `courseId`). Same lifecycle as sessions, minus the entry write. |
+| `users/{uid}/sessions/{id}`      | `courseId`, `goalId` (nullable), `plannedMinutes`, `startedAt`, `endedAt`, `outcome: 'running'|'completed'|'canceled'`, `loggedMinutes`, `entryId`, `alarmedAt?` | Only one `outcome: 'running'` per user at a time — enforced in `useSession`, not in rules. Completing writes an `entries` doc and links it via `entryId`. `alarmedAt` is set when the end-of-session chime has fired — persisted so page reload / `SessionBanner` remount on an over-elapsed running session doesn't re-fire. |
+| `users/{uid}/breaks/{id}`        | `plannedMinutes`, `startedAt`, `endedAt`, `outcome`, `alarmedAt?` | Top-level (no `courseId`). Same lifecycle as sessions, minus the entry write. `alarmedAt` is set when the end-of-break chime has fired — persisted so BreakFab unmount/remount (Dashboard ↔ CoursePage) doesn't re-fire the alarm. |
 | `users/{uid}/plannedBlocks/{id}` | `courseId`, `title`, `startAt`, `endAt`, `notes?`, `calendarEventId?`, `createdAt` | The day-plan. `calendarEventId` present ⇔ mirrors a Google Calendar event we created; editing/deleting the block updates/deletes the calendar event too. |
 | `users/{uid}/history/{id}`       | `courseId`, `goalId`, `metric`, `target`, `achieved`, `periodStart`, `periodEnd`, `period`, `periodKey` | Written by `archivePastPeriods()`. Time-goal history has `metric = 'minutes'` and integer-minute `achieved`/`target`. |
 
@@ -173,7 +173,7 @@ Each block has a "Start" button that mounts `SessionTimer` with duration pre-fil
 **Alarm library** (`src/lib/alarm.ts`) exports:
 - `requestNotificationPermission()` — safe to call multiple times
 - `primeAudio()` — call on user gesture to unlock playback
-- `fireAlarm({ title, body })` — plays `/chime.mp3` from `public/` and shows a `Notification`
+- `fireAlarm({ title, body })` — plays `/chime.mp3` via the Web Audio API (`AudioBufferSourceNode`, not `HTMLAudioElement` — `pause()` was unreliable on iOS PWA) and shows a `Notification`. The chime re-fires when it ends until acknowledged, up to 60 s total (`REPEAT_WINDOW_MS`). `stopAlarm()` bumps a monotonic token that both cancels any pending replay and short-circuits any in-flight `fireAlarm` still awaiting the buffer
 - `useWakeLock(active: boolean)` — keeps screen on
 
 `public/chime.mp3` must be provided before shipping (see `public/CHIME.md`). If missing, the alarm still fires visually; only audio is silent. Workbox precaches `.mp3` (see `vite.config.ts` `globPatterns`).

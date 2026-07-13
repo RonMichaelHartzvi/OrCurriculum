@@ -108,6 +108,10 @@ export interface Session {
   outcome: TimedOutcome
   loggedMinutes: number | null
   entryId: string | null
+  // Set when the end-of-session chime has fired for this session, so
+  // reload / SessionBanner remount doesn't re-fire on an over-elapsed
+  // running session.
+  alarmedAt?: Timestamp | null
 }
 
 export interface Break {
@@ -116,6 +120,9 @@ export interface Break {
   startedAt: Timestamp | null
   endedAt: Timestamp | null
   outcome: TimedOutcome
+  // Set when the end-of-break chime has fired for this break, so remounting
+  // the BreakFab (e.g. after navigating to a course and back) doesn't re-fire.
+  alarmedAt?: Timestamp | null
 }
 
 export interface PlannedBlock {
