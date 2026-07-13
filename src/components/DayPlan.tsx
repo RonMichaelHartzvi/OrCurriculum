@@ -516,26 +516,25 @@ function BlockFormDialog({
               : 'Google Calendar is not configured. Set VITE_GOOGLE_CLIENT_ID in .env to enable sync.'}
           </div>
         )}
-        <div className="sticky bottom-0 -mx-6 -mb-6 mt-2 px-6 py-4 bg-white/95 backdrop-blur border-t border-petal/60 flex items-center gap-2">
-          {initial && onDelete && (
-            <button
-              type="button"
-              className="btn-ghost text-berry/70 hover:text-berry"
-              onClick={async () => {
-                if (confirm('Delete this block?')) {
-                  await onDelete()
-                  onClose()
-                }
-              }}
-            >
-              Delete
-            </button>
-          )}
-          <div className="flex-1" />
-          <button type="button" className="btn-soft" onClick={onClose}>
+        {initial && onDelete && (
+          <button
+            type="button"
+            className="btn-ghost text-berry/70 hover:text-berry w-full justify-start"
+            onClick={async () => {
+              if (confirm('Delete this block?')) {
+                await onDelete()
+                onClose()
+              }
+            }}
+          >
+            Delete block
+          </button>
+        )}
+        <div className="grid grid-cols-2 gap-2 pt-2">
+          <button type="button" className="btn-soft text-base py-3" onClick={onClose}>
             Cancel
           </button>
-          <button type="submit" className="btn-primary" disabled={busy}>
+          <button type="submit" className="btn-primary text-base py-3" disabled={busy}>
             {busy ? '…' : initial ? 'Save changes' : 'Add block'}
           </button>
         </div>
