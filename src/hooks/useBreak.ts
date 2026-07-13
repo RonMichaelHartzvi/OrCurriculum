@@ -4,7 +4,6 @@ import {
   collection,
   doc,
   onSnapshot,
-  orderBy,
   query,
   serverTimestamp,
   updateDoc,
@@ -24,14 +23,19 @@ export function useBreak(uid: string | null) {
       return
     }
     const ref = collection(db, 'users', uid, 'breaks')
+    // Query only by outcome — avoids requiring a composite Firestore index.
+    // Only one running break at a time, so no ordering is needed.
     const unsub = onSnapshot(
-      query(ref, where('outcome', '==', 'running'), orderBy('startedAt', 'desc')),
+      query(ref, where('outcome', '==', 'running')),
       (snap) => {
         const first = snap.docs[0]
         setActive(first ? ({ id: first.id, ...(first.data() as Omit<Break, 'id'>) }) : null)
         setLoading(false)
       },
-      () => setLoading(false)
+      (err) => {
+        console.error('useBreak onSnapshot error:', err)
+        setLoading(false)
+      }
     )
     return unsub
   }, [uid])

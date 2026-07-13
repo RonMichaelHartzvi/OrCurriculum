@@ -4,7 +4,6 @@ import {
   collection,
   doc,
   onSnapshot,
-  orderBy,
   query,
   serverTimestamp,
   updateDoc,
@@ -26,14 +25,20 @@ export function useSession(uid: string | null) {
       return
     }
     const ref = collection(db, 'users', uid, 'sessions')
+    // Query only by outcome to avoid needing a Firestore composite index.
+    // There is at most one running session per user (enforced in startSession),
+    // so no ordering is required.
     const unsub = onSnapshot(
-      query(ref, where('outcome', '==', 'running'), orderBy('startedAt', 'desc')),
+      query(ref, where('outcome', '==', 'running')),
       (snap) => {
         const first = snap.docs[0]
         setActive(first ? ({ id: first.id, ...(first.data() as Omit<Session, 'id'>) }) : null)
         setLoading(false)
       },
-      () => setLoading(false)
+      (err) => {
+        console.error('useSession onSnapshot error:', err)
+        setLoading(false)
+      }
     )
     return unsub
   }, [uid])
