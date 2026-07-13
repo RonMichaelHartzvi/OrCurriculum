@@ -4,8 +4,9 @@ import type { Course, Entry, Goal, GoalUnit, PeriodKind } from '../types'
 import { RingProgress } from './RingProgress'
 import { QuickAddSheet } from './QuickAddSheet'
 import { GoalFormDialog } from './GoalFormDialog'
-import { formatPeriodRange, periodKey } from '../lib/periods'
+import { formatPeriodRange } from '../lib/periods'
 import { formatDuration } from '../lib/time'
+import { computeProgress } from '../lib/progress'
 
 interface Props {
   course: Course
@@ -34,12 +35,7 @@ export function CourseCard({
   const [showGoalForm, setShowGoalForm] = useState(false)
   const [logGoal, setLogGoal] = useState<Goal | null>(null)
 
-  const progressFor = (goal: Goal) => {
-    const currentKey = periodKey(goal.period)
-    return entries
-      .filter((e) => e.goalId === goal.id && e.periodKey === currentKey)
-      .reduce((s, e) => s + (e.amount || 0), 0)
-  }
+  const progressFor = (goal: Goal) => computeProgress(goal, entries)
 
   const stop = (fn: () => void) => (e: React.MouseEvent) => {
     e.stopPropagation()
