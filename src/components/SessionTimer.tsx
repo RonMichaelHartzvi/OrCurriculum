@@ -55,6 +55,7 @@ export function SessionTimer({
   const [askConfirm, setAskConfirm] = useState<Session | null>(null)
   const [logAmount, setLogAmount] = useState<number>(0)
   const [starting, setStarting] = useState(false)
+  const [startError, setStartError] = useState<string | null>(null)
 
   const isActiveForThisCourse = active && active.courseId === course.id
 
@@ -93,9 +94,7 @@ export function SessionTimer({
   async function handleStart() {
     if (starting) return
     setStarting(true)
-    // Priming audio + asking for notification permission must never block the
-    // session from starting. Both are best-effort — the timer works without
-    // them; only the alarm chime and OS notification degrade if denied.
+    setStartError(null)
     try {
       primeAudio()
     } catch {
@@ -108,8 +107,12 @@ export function SessionTimer({
         goalId,
         plannedMinutes: minutes
       })
+      // Success: close the setup modal so the persistent SessionBanner takes
+      // over as the running-session UI.
+      onClose()
     } catch (err) {
-      console.error('Failed to start session:', err)
+      const msg = err instanceof Error ? err.message : String(err)
+      setStartError(msg || 'Unknown error')
     } finally {
       setStarting(false)
     }
@@ -277,6 +280,11 @@ export function SessionTimer({
             />
           </div>
         </div>
+        {startError && (
+          <div className="text-sm text-white bg-red-500/95 rounded-2xl px-3 py-3 font-semibold shadow-soft">
+            Couldn't start the session: {startError}
+          </div>
+        )}
         <div className="flex justify-end gap-2 pt-1">
           <button type="button" className="btn-soft" onClick={onClose}>
             Cancel

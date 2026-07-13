@@ -5,6 +5,7 @@ import { CoursePage } from './components/CoursePage'
 import { TimeDashboard } from './components/TimeDashboard'
 import { PlanView } from './components/PlanView'
 import { UpdatePrompt } from './components/UpdatePrompt'
+import { SessionBanner } from './components/SessionBanner'
 import { isAllowed } from './firebase'
 import { useRoute } from './hooks/useRoute'
 
@@ -29,6 +30,7 @@ export default function App() {
       ) : (
         <Dashboard user={user} />
       )}
+      {user && isAllowed(user.email) && <SessionBanner user={user} />}
       <UpdatePrompt />
     </>
   )
