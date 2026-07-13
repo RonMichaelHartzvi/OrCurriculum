@@ -27,10 +27,12 @@ The design system: soft pastel-pink, rounded-4xl cards, `Quicksand` display + `N
 
 ```
 src/
-  App.tsx                    # auth gate: allow-listed user → Dashboard, else AuthScreen
+  App.tsx                    # auth gate + hash-route dispatch (Dashboard | CoursePage); mounts UpdatePrompt
   main.tsx
   firebase.ts                # initializeApp, GoogleAuthProvider, ALLOWED_EMAILS, isAllowed()
-  types.ts                   # Course, Goal, Entry, HistoryRecord, PeriodKind
+  types.ts                   # Course, Goal, Entry, HistoryRecord, PeriodKind,
+                             # Task, TaskType, QuestionStatus, QUESTION_STATUS_META, QUESTION_STATUS_ORDER
+  vite-env.d.ts              # types for vite/client and vite-plugin-pwa/react (needed for useRegisterSW)
   index.css                  # Tailwind layers + component classes
   lib/
     periods.ts               # startOfDay/Week, periodKey (YYYY-MM-DD | YYYY-Wnn), formatters
@@ -41,15 +43,22 @@ src/
     useGoals.ts
     useEntries.ts
     useHistory.ts            # read-only listener on archived periods
+    useTasks.ts              # regular + practice-test CRUD, updateQuestionStatus, resetPracticeTest
+    useRoute.ts              # tiny hashchange router — returns Route ({view:'dashboard'} | {view:'course', courseId})
   components/
     AuthScreen.tsx           # Google sign-in + "not on allowlist" message
     Dashboard.tsx            # header, grid of CourseCards, floating "+ Course", history dialog
-    CourseCard.tsx           # per-course card: ring progress per goal + Log/Edit buttons
+    CoursePage.tsx           # per-course detail page: themed header, goals, TaskList, per-course history
+    CourseCard.tsx           # clickable dashboard card: ring progress per goal + inline +Log
     CourseFormDialog.tsx     # create / edit / delete a course
     GoalFormDialog.tsx       # create / edit / delete a goal (metric + target + weekly|daily)
     QuickAddSheet.tsx        # +1 / +2 / +5 / +10 quick-add or custom amount
+    TaskList.tsx             # dispatches TaskRow vs PracticeTestRow; hosts add-task input + "+ Practice test"
+    PracticeTestDialog.tsx   # create-test modal: title + question-count stepper (defaults to last test's count)
+    PracticeTestRow.tsx      # expandable practice-test row: donut, badges, question grid + status picker
     HistoryView.tsx          # dialog listing past periods grouped by course
     RingProgress.tsx         # SVG ring with gradient + spring animation
+    UpdatePrompt.tsx         # "🌸 New version ready" toast; polls SW every 60s via useRegisterSW
     ui/Dialog.tsx            # base modal with animated backdrop, ESC-to-close
 
 firestore.rules              # public — restricts all docs to owning user
@@ -67,11 +76,26 @@ Everything is scoped under `users/{uid}`. The security rules in `firestore.rules
 | `users/{uid}/courses/{id}`       | `name`, `emoji`, `color`, `createdAt`                                                    | User-managed. Colors from `COURSE_COLORS`, emojis from `COURSE_EMOJIS` in `types.ts`. |
 | `users/{uid}/goals/{id}`         | `courseId`, `metric` (free text), `target` (int), `period: 'weekly'|'daily'`, `active`, `createdAt` | Multiple goals per course allowed. Deleting a goal doesn't cascade to entries — they still archive on next load. |
 | `users/{uid}/entries/{id}`       | `courseId`, `goalId`, `metric`, `amount`, `at` (serverTimestamp), `periodKey`            | `periodKey` is set at write time from the goal's period. |
+| `users/{uid}/tasks/{id}`         | `courseId`, `title`, `done`, `createdAt`, `completedAt`, plus optional `type: 'regular' \| 'practiceTest'`, `questionCount`, `questions: QuestionStatus[]` | Untimed to-dos, live under a course. Docs without a `type` field are treated as `regular` (backwards-compatible). Practice-test `done` is auto-derived — see below. |
 | `users/{uid}/goals/{id}` (added `unit`) | `unit?: 'count' | 'minutes'` — absent = `'count'` (backwards compat). Time goals store `target` in whole minutes and set `metric = 'minutes'`. |
 | `users/{uid}/sessions/{id}`      | `courseId`, `goalId` (nullable), `plannedMinutes`, `startedAt`, `endedAt`, `outcome: 'running'|'completed'|'canceled'`, `loggedMinutes`, `entryId` | Only one `outcome: 'running'` per user at a time — enforced in `useSession`, not in rules. Completing writes an `entries` doc and links it via `entryId`. |
 | `users/{uid}/breaks/{id}`        | `plannedMinutes`, `startedAt`, `endedAt`, `outcome` | Top-level (no `courseId`). Same lifecycle as sessions, minus the entry write. |
 | `users/{uid}/plannedBlocks/{id}` | `courseId`, `title`, `startAt`, `endAt`, `notes?`, `calendarEventId?`, `createdAt` | The day-plan. `calendarEventId` present ⇔ mirrors a Google Calendar event we created; editing/deleting the block updates/deletes the calendar event too. |
 | `users/{uid}/history/{id}`       | `courseId`, `goalId`, `metric`, `target`, `achieved`, `periodStart`, `periodEnd`, `period`, `periodKey` | Written by `archivePastPeriods()`. Time-goal history has `metric = 'minutes'` and integer-minute `achieved`/`target`. |
+
+### Tasks and practice tests
+
+Regular tasks are simple: a title with a `done` boolean toggled by the checkbox. They stay visible in a "Done" group after completion.
+
+Practice tests are a task subtype (`type: 'practiceTest'`) with a fixed `questionCount` and a `questions: QuestionStatus[]` array (`'unanswered' | 'succeeded' | 'failed' | 'retry'`). The row is expandable to reveal a color-coded question grid; tapping a question opens a small status picker dialog. Question metadata (colors, labels, order) lives in `QUESTION_STATUS_META` and `QUESTION_STATUS_ORDER` in `types.ts`.
+
+**Practice-test `done` is auto-derived**, never manually toggled:
+```
+done = questions.every(q => q === 'succeeded' || q === 'failed')
+```
+That means `retry` and `unanswered` both keep the test in the **Open** group — `retry` is an explicit "come back to this" signal, so it belongs where the user is looking for work to do. Reset via `resetPracticeTest` in `useTasks`.
+
+When creating a new practice test on a course, `TaskList` defaults the question count to the most recent practice test's count on the same course (fallback: 20).
 
 ### Period keys
 
@@ -168,11 +192,34 @@ One-way write only: the app creates / updates / deletes events on the user's pri
 
 **Background alarms (not in this feature)**: today's alarm only fires reliably while the tab is open. `docs/future-fcm-alarms.md` documents the FCM design for a follow-up PR.
 
-## PWA gotchas
+## Routing
 
-- Service worker is `autoUpdate`. The **first** load after a deploy still serves the old cached shell; the SW downloads the new one in the background and it applies on the **next** load. If you deploy and immediately test on your phone, close and reopen the installed app once, then again — or in DevTools → Application → Service Workers → Update / Unregister.
-- Cache headers in `firebase.json`: hashed assets get `max-age=31536000, immutable`; `sw.js` gets `no-cache`. Don't loosen those.
-- Icons live in `public/` and are 192/512/apple. If you replace the pink motif, update all three or the manifest fails audit.
+Hash-based, no router library. See `src/hooks/useRoute.ts`.
+
+- `#/` (or empty hash) → Dashboard
+- `#/course/{courseId}` → CoursePage for that course
+
+Navigate with `openCourse(id)` / `openDashboard()` helpers exported from `useRoute.ts`. Browser back / forward works because `hashchange` is a real event. Hash routing was picked over history-mode because it doesn't need Firebase Hosting SPA rewrites for deep-linking to work — nice with the installed PWA.
+
+## PWA behavior — deploys propagate fast
+
+The stale-cache problem this project hit in its first weeks is gone. The current setup makes every deploy visible to open tabs within about a minute, with no manual hard-refresh needed. Three pieces work together:
+
+1. **Firebase cache headers** (`firebase.json`)
+   - `/`, `/index.html`, `/sw.js`, `/registerSW.js`, `/manifest.webmanifest` → `no-cache` (browser always revalidates the shell + SW).
+   - `assets/*.@(js|css|svg|png|woff2)` and `workbox-*.js` → `max-age=31536000, immutable` (content-hashed filenames make this safe).
+   - Firebase Hosting applies the **last** matching header rule, so the wildcard `immutable` block comes first and the specific `no-cache` overrides come after. Reordering breaks this.
+
+2. **Workbox** (`vite.config.ts`)
+   - `registerType: 'autoUpdate'`, `skipWaiting: true`, `clientsClaim: true`, `cleanupOutdatedCaches: true`. New SW installs, activates, and claims open pages without waiting for tabs to close.
+
+3. **In-app prompt** (`src/components/UpdatePrompt.tsx`)
+   - Uses `useRegisterSW` from `virtual:pwa-register/react` (types come from `src/vite-env.d.ts`).
+   - Polls the SW every 60 s. When a waiting SW is detected, renders the cute pink "🌸 New version ready — Reload / Later" pill. `Reload` calls `updateServiceWorker(true)` which activates the new SW and refreshes.
+
+If you touch any of the three, keep the trio consistent. Don't loosen the header rules; don't disable `skipWaiting`/`clientsClaim` without a reason; don't remove the poll from `UpdatePrompt.tsx` — it's what makes the toast feel timely.
+
+Icons live in `public/` (192, 512, apple-touch). If you replace the pink motif, update all three or the manifest audit fails.
 
 ## Local dev
 
@@ -322,18 +369,20 @@ Firebase web-config keys are technically identifiers, not secrets — but keepin
 
 | Task                                        | Files                                                        |
 | ------------------------------------------- | ------------------------------------------------------------ |
-| Add a new field on a course/goal/entry      | `src/types.ts` → the relevant hook in `src/hooks/` → the form dialog |
-| Change how progress is calculated            | `progressFor` in both `CourseCard.tsx` and `CoursePage.tsx` — keep in sync |
+| Add a new field on a course/goal/entry/task | `src/types.ts` → the relevant hook in `src/hooks/` → the form dialog |
+| Change how progress is calculated            | `progressFor` in both `CourseCard.tsx` and `CoursePage.tsx` (duplicated — keep them in sync) |
 | Change week start (Sun → Mon)                | `startOfWeek` in `src/lib/periods.ts`                        |
 | Add a new period kind (e.g. monthly)         | `PeriodKind` in `types.ts`, then `lib/periods.ts` functions, then goal-form UI |
 | Add a new time-goal preset (session/break)   | `DURATION_PRESETS` in `SessionTimer.tsx` or `BREAK_PRESETS` in `BreakTimer.tsx` |
 | Add a new dashboard range                    | `RANGES` array in `TimeDashboard.tsx` + a `rangeStart()` case |
 | Change the alarm chime                       | Drop a new `public/chime.mp3`; caller does not need editing  |
 | Change the calendar color mapping            | `COURSE_COLOR_TO_CALENDAR` in `src/lib/calendarColors.ts`    |
-| Add a new hash route                         | Extend `Route` union + `parseHash` in `src/hooks/useRoute.ts`, then dispatch in `src/App.tsx` |
+| Add a new question status for practice tests | `QuestionStatus` union in `types.ts`, entries in `QUESTION_STATUS_META` and `QUESTION_STATUS_ORDER`, done-derivation in `useTasks.ts#updateQuestionStatus` |
+| Add a route                                  | Extend the `Route` union + `parseHash` in `src/hooks/useRoute.ts`, dispatch in `src/App.tsx` |
 | Change palette / spacing / radii             | `tailwind.config.js` + `src/index.css`                       |
 | Add a new top-level Firestore collection     | Add rules block in `firestore.rules` (else silent 403), then a hook |
 | Update PWA name / icons / theme              | `vite.config.ts` (manifest) + `public/*.png` + `index.html`  |
+| Change the "New version ready" toast timing  | `UPDATE_POLL_MS` in `src/components/UpdatePrompt.tsx`        |
 
 ## Known limitations / roadmap
 
