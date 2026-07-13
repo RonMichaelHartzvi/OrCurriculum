@@ -3,7 +3,7 @@ import { Dialog } from './ui/Dialog'
 import { RingProgress } from './RingProgress'
 import type { Course, Goal, Session } from '../types'
 import { formatDuration, sessionElapsedMinutes, sessionRemainingMinutes } from '../lib/time'
-import { primeAudio, requestNotificationPermission, useWakeLock } from '../lib/alarm'
+import { primeAudio, requestNotificationPermission, stopAlarm, useWakeLock } from '../lib/alarm'
 
 const DURATION_PRESETS = [25, 45, 60, 90, 120]
 
@@ -82,6 +82,12 @@ export function SessionTimer({
       setLogAmount(active.plannedMinutes)
     }
   }, [active, course.id, now, askConfirm])
+
+  // Cut the chime as soon as the confirm dialog is shown — the user has
+  // acknowledged that time is up, no need to keep playing.
+  useEffect(() => {
+    if (askConfirm) stopAlarm()
+  }, [askConfirm])
 
   const linkedGoal = goals.find((g) => g.id === goalId) ?? null
 

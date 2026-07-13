@@ -46,6 +46,17 @@ export interface AlarmPayload {
   silent?: boolean
 }
 
+export function stopAlarm(): void {
+  const el = chimeEl
+  if (!el) return
+  try {
+    el.pause()
+    el.currentTime = 0
+  } catch {
+    /* ignore */
+  }
+}
+
 export async function fireAlarm({ title, body, silent }: AlarmPayload): Promise<void> {
   if (!silent) {
     const el = getChime()
