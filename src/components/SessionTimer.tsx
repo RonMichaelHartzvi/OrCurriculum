@@ -83,11 +83,6 @@ export function SessionTimer({
     }
   }, [active, course.id, now, askConfirm])
 
-  // Cut the chime as soon as the confirm dialog is shown — the user has
-  // acknowledged that time is up, no need to keep playing.
-  useEffect(() => {
-    if (askConfirm) stopAlarm()
-  }, [askConfirm])
 
   const linkedGoal = goals.find((g) => g.id === goalId) ?? null
 
@@ -120,6 +115,7 @@ export function SessionTimer({
 
   async function handleConfirm() {
     if (!askConfirm) return
+    stopAlarm()
     await onComplete(askConfirm, linkedGoal, Math.max(0, Math.round(logAmount)))
     setAskConfirm(null)
     onClose()
@@ -140,12 +136,26 @@ export function SessionTimer({
   // Confirmation step: session hit zero, ask user how many minutes to log.
   if (askConfirm) {
     return (
-      <Dialog open={open} onClose={() => setAskConfirm(null)} title="Log this session">
+      <Dialog
+        open={open}
+        onClose={() => {
+          stopAlarm()
+          setAskConfirm(null)
+        }}
+        title="Log this session"
+      >
         <div className="space-y-4">
           <div className="text-sm text-berry/80">
             Great work! You planned {formatDuration(askConfirm.plannedMinutes)} on{' '}
             <span className="font-semibold">{course.name}</span>. How many minutes should we credit?
           </div>
+          <button
+            type="button"
+            className="btn-soft text-sm"
+            onClick={stopAlarm}
+          >
+            🔇 Silence chime
+          </button>
           <div className="flex items-center gap-2">
             <input
               type="number"
@@ -161,6 +171,7 @@ export function SessionTimer({
             <button
               className="btn-ghost text-berry/70"
               onClick={async () => {
+                stopAlarm()
                 await onCancel(askConfirm)
                 setAskConfirm(null)
                 onClose()
