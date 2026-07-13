@@ -428,8 +428,11 @@ function BlockFormDialog({
   }
 
   return (
-    <Dialog open={open} onClose={onClose} title={initial ? 'Edit block' : 'New block'}>
+    <Dialog open={open} onClose={onClose} title={initial ? 'Edit block · v4' : 'New block · v4'}>
       <form onSubmit={submit} className="space-y-4">
+        <div className="bg-yellow-200 border border-yellow-400 text-yellow-900 text-xs rounded-2xl px-3 py-2">
+          🐛 Debug marker v4 — if you see this yellow box, the fresh bundle is loaded. Scroll to the bottom of this form to find the <b>Add block</b> button.
+        </div>
         {!lockCourseId && (
           <div>
             <label className="text-xs font-semibold text-berry/80 uppercase tracking-wide">
