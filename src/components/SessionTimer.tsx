@@ -149,13 +149,6 @@ export function SessionTimer({
             Great work! You planned {formatDuration(askConfirm.plannedMinutes)} on{' '}
             <span className="font-semibold">{course.name}</span>. How many minutes should we credit?
           </div>
-          <button
-            type="button"
-            className="btn-soft text-sm"
-            onClick={stopAlarm}
-          >
-            🔇 Silence chime
-          </button>
           <div className="flex items-center gap-2">
             <input
               type="number"
