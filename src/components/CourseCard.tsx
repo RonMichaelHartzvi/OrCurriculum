@@ -1,17 +1,23 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import type { Course, Entry, Goal, PeriodKind } from '../types'
+import type { Course, Entry, Goal, GoalUnit, PeriodKind } from '../types'
 import { RingProgress } from './RingProgress'
 import { QuickAddSheet } from './QuickAddSheet'
 import { GoalFormDialog } from './GoalFormDialog'
 import { formatPeriodRange, periodKey } from '../lib/periods'
+import { formatDuration } from '../lib/time'
 
 interface Props {
   course: Course
   goals: Goal[]
   entries: Entry[]
   onOpen: () => void
-  onAddGoal: (data: { metric: string; target: number; period: PeriodKind }) => Promise<void>
+  onAddGoal: (data: {
+    metric: string
+    target: number
+    period: PeriodKind
+    unit: GoalUnit
+  }) => Promise<void>
   onLog: (goal: Goal, amount: number) => Promise<void>
   openTaskCount?: number
 }
@@ -90,6 +96,11 @@ export function CourseCard({
         <div className="mt-5 space-y-5">
           {goals.map((g) => {
             const p = progressFor(g)
+            const isTime = g.unit === 'minutes'
+            const label = isTime
+              ? `${formatDuration(p)} / ${formatDuration(g.target)}`
+              : `${p} / ${g.target}`
+            const sublabel = isTime ? 'study time' : g.metric
             return (
               <div key={g.id} className="flex items-center gap-4">
                 <RingProgress
@@ -98,8 +109,8 @@ export function CourseCard({
                   color={course.color}
                   size={110}
                   strokeWidth={10}
-                  label={`${p} / ${g.target}`}
-                  sublabel={g.metric}
+                  label={label}
+                  sublabel={sublabel}
                 />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">

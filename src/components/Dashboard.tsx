@@ -6,11 +6,12 @@ import { useGoals } from '../hooks/useGoals'
 import { useEntries } from '../hooks/useEntries'
 import { useHistory } from '../hooks/useHistory'
 import { useTasks } from '../hooks/useTasks'
-import { openCourse } from '../hooks/useRoute'
+import { openCourse, openPlan, openTime } from '../hooks/useRoute'
 import { archivePastPeriods } from '../lib/archive'
 import { CourseCard } from './CourseCard'
 import { CourseFormDialog } from './CourseFormDialog'
 import { HistoryView } from './HistoryView'
+import { BreakFab } from './BreakTimer'
 import { periodKey } from '../lib/periods'
 import type { Goal, PeriodKind } from '../types'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -60,6 +61,12 @@ export function Dashboard({ user }: { user: User }) {
             Hi {user.email?.split('@')[0]} — let's crush this week 💗
           </p>
         </div>
+        <button className="btn-ghost" onClick={openPlan}>
+          Plan
+        </button>
+        <button className="btn-ghost" onClick={openTime}>
+          Time
+        </button>
         <button className="btn-ghost" onClick={() => setShowHistory(true)}>
           History
         </button>
@@ -120,6 +127,8 @@ export function Dashboard({ user }: { user: User }) {
           + Course
         </motion.button>
       </div>
+
+      <BreakFab uid={uid} />
 
       <CourseFormDialog
         open={showNewCourse}

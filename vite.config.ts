@@ -23,7 +23,7 @@ export default defineConfig({
         ]
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+        globPatterns: ['**/*.{js,css,html,svg,png,woff2,mp3}'],
         navigateFallbackDenylist: [/^\/__/],
         // Take over from any previous SW immediately so users don't stay on
         // an old shell after a deploy.

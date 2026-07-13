@@ -4,7 +4,7 @@ Short, focused context for anyone (human or AI) picking up this project. Read th
 
 ## What this is
 
-A cute pastel-pink **PWA** for tracking weekly and daily study goals per course. You add courses (e.g. "Anatomy"), attach goals to them (e.g. "40 questions per week", "2 tests per day"), and log progress in small increments through the day. Each goal shows an animated ring of progress; period rollovers auto-archive to a history collection.
+A cute pastel-pink **PWA** for tracking weekly and daily study goals per course. You add courses (e.g. "Anatomy"), attach goals to them (e.g. "40 questions per week", "10 hours per week"), and log progress in small increments through the day. Goals come in two kinds — **count** (arbitrary free-text metric) and **time** (minutes stored / hours displayed). Time-based goals can be logged via a countdown-timer study session with a chime alarm, a manual entry, or a scheduled day-plan block (which can optionally push itself to Google Calendar). Each goal shows an animated ring of progress; period rollovers auto-archive to a history collection.
 
 Live: <https://orcurriculum.web.app>
 
@@ -77,7 +77,11 @@ Everything is scoped under `users/{uid}`. The security rules in `firestore.rules
 | `users/{uid}/goals/{id}`         | `courseId`, `metric` (free text), `target` (int), `period: 'weekly'|'daily'`, `active`, `createdAt` | Multiple goals per course allowed. Deleting a goal doesn't cascade to entries — they still archive on next load. |
 | `users/{uid}/entries/{id}`       | `courseId`, `goalId`, `metric`, `amount`, `at` (serverTimestamp), `periodKey`            | `periodKey` is set at write time from the goal's period. |
 | `users/{uid}/tasks/{id}`         | `courseId`, `title`, `done`, `createdAt`, `completedAt`, plus optional `type: 'regular' \| 'practiceTest'`, `questionCount`, `questions: QuestionStatus[]` | Untimed to-dos, live under a course. Docs without a `type` field are treated as `regular` (backwards-compatible). Practice-test `done` is auto-derived — see below. |
-| `users/{uid}/history/{id}`       | `courseId`, `goalId`, `metric`, `target`, `achieved`, `periodStart`, `periodEnd`, `period`, `periodKey` | Written by `archivePastPeriods()`. |
+| `users/{uid}/goals/{id}` (added `unit`) | `unit?: 'count' | 'minutes'` — absent = `'count'` (backwards compat). Time goals store `target` in whole minutes and set `metric = 'minutes'`. |
+| `users/{uid}/sessions/{id}`      | `courseId`, `goalId` (nullable), `plannedMinutes`, `startedAt`, `endedAt`, `outcome: 'running'|'completed'|'canceled'`, `loggedMinutes`, `entryId` | Only one `outcome: 'running'` per user at a time — enforced in `useSession`, not in rules. Completing writes an `entries` doc and links it via `entryId`. |
+| `users/{uid}/breaks/{id}`        | `plannedMinutes`, `startedAt`, `endedAt`, `outcome` | Top-level (no `courseId`). Same lifecycle as sessions, minus the entry write. |
+| `users/{uid}/plannedBlocks/{id}` | `courseId`, `title`, `startAt`, `endAt`, `notes?`, `calendarEventId?`, `createdAt` | The day-plan. `calendarEventId` present ⇔ mirrors a Google Calendar event we created; editing/deleting the block updates/deletes the calendar event too. |
+| `users/{uid}/history/{id}`       | `courseId`, `goalId`, `metric`, `target`, `achieved`, `periodStart`, `periodEnd`, `period`, `periodKey` | Written by `archivePastPeriods()`. Time-goal history has `metric = 'minutes'` and integer-minute `achieved`/`target`. |
 
 ### Tasks and practice tests
 
@@ -100,7 +104,7 @@ When creating a new practice test on a course, `TaskList` defaults the question 
 
 ### Progress calculation
 
-Live "progress toward this goal" = **sum of `amount` on entries where `goalId === g.id` and `periodKey === periodKey(g.period)`**. Done in `CourseCard.tsx#progressFor`. No counters, no race conditions, idempotent.
+Live "progress toward this goal" = **sum of `amount` on entries where `goalId === g.id` and `periodKey === periodKey(g.period)`**. Done in `CourseCard.tsx#progressFor` (duplicated in `CoursePage.tsx#progressFor` — keep in sync). No counters, no race conditions, idempotent. For time-based goals the same math applies — `amount` is minutes, the UI just formats it as `Xh Ym` via `formatDuration()` in `src/lib/time.ts`.
 
 ### Auto-archive on load
 
@@ -132,6 +136,61 @@ Rules to remember:
 - If you add a new top-level collection, add a rules block for it too or the app breaks silently in production.
 
 Deploy rules with `firebase deploy --only firestore:rules`.
+
+## Time tracking
+
+Time-based goals reuse the same `entries` + `periodKey` model as count goals — no parallel data path. Storage-unit convention: **all time amounts are integer minutes** everywhere (goal `target`, entry `amount`, session `plannedMinutes` / `loggedMinutes`, break `plannedMinutes`, history `achieved` / `target`). The display layer converts to `Xh Ym` via `formatDuration()` in `src/lib/time.ts`. Do not introduce floats — aggregation drifts.
+
+**Goal.unit**: `'count'` (default when absent) or `'minutes'`. `GoalFormDialog` shows a Kind toggle at the top; when `'minutes'` the metric input hides and the target field switches to decimal hours (`step="0.25"`). The value is converted to minutes on save.
+
+**Sessions** (`useSession` + `SessionTimer`):
+- Only one `outcome: 'running'` session per user at a time. The hook filters on `where('outcome', '==', 'running')` and treats the first result as the active session.
+- Session state lives entirely in Firestore, so a browser refresh mid-session resumes cleanly — elapsed is computed as `now - startedAt`.
+- On start: session doc created with `startedAt: serverTimestamp()`. Component asks for notification permission and primes the audio element.
+- On end (timer reaches zero): `fireAlarm()` from `src/lib/alarm.ts` (browser Notification + audio chime + focus tab). A confirmation dialog opens; user confirms the minutes to log. Completion writes one `entries` doc and links its id back on the session.
+- "End now & log" credits the actual elapsed minutes (rounded). Cancel writes no entry.
+- The `useWakeLock` hook keeps the screen awake while a session runs; it re-acquires on `visibilitychange` because browsers drop the lock when the tab hides.
+
+**Breaks** (`useBreak` + `BreakFab`): same lifecycle, no entry write. Break is top-level (not per course). The FAB lives on the dashboard bottom-left.
+
+**Manual time entry**: reuses `QuickAddSheet`. When `goal.unit === 'minutes'`, presets become `+15 / +30 / +60 / +90` and the custom input is minutes.
+
+**Day plan** (`usePlannedBlocks` + `DayPlan` + `PlanView`): planned time blocks live in `plannedBlocks`. The `DayPlan` component is used two ways:
+- **Compact** on `CoursePage.tsx` filtered to that course
+- **Full** on `PlanView.tsx` (top-level `#/plan` route) across all courses with a date navigator
+
+Each block has a "Start" button that mounts `SessionTimer` with duration pre-filled from the block's length. Editing a block updates its calendar event too (if it was synced); deleting removes the calendar event.
+
+**Time dashboard** (`TimeDashboard`, `#/time`): 4 range chips (7d / 30d / 90d / all-time). Sums entries by `at` timestamp and includes archived `history` records (using each history record's period midpoint for date-bucketing) so all-time is complete. Daily average = total ÷ days in window.
+
+**Alarm library** (`src/lib/alarm.ts`) exports:
+- `requestNotificationPermission()` — safe to call multiple times
+- `primeAudio()` — call on user gesture to unlock playback
+- `fireAlarm({ title, body })` — plays `/chime.mp3` from `public/` and shows a `Notification`
+- `useWakeLock(active: boolean)` — keeps screen on
+
+`public/chime.mp3` must be provided before shipping (see `public/CHIME.md`). If missing, the alarm still fires visually; only audio is silent. Workbox precaches `.mp3` (see `vite.config.ts` `globPatterns`).
+
+## Google Calendar sync
+
+One-way write only: the app creates / updates / deletes events on the user's primary Google Calendar to mirror their `plannedBlocks`. **We do not read events back.**
+
+**Why not extend the Firebase Auth Google scope**: Firebase Auth returns the OAuth access token at sign-in, but it expires in ~1 hour and Firebase does not refresh it. So we keep `GoogleAuthProvider` bare (identity only) and mount **Google Identity Services** separately for the calendar scope, so a fresh token is available on demand.
+
+**Flow** (`src/hooks/useCalendarSync.ts`):
+1. Load the GIS script tag in `index.html` (`<script src="https://accounts.google.com/gsi/client" async defer>`).
+2. Lazy-initialize a token client via `google.accounts.oauth2.initTokenClient({ client_id: VITE_GOOGLE_CLIENT_ID, scope: 'https://www.googleapis.com/auth/calendar.events' })` on first use.
+3. `getAccessToken()` returns a cached token if fetched <55 min ago; otherwise silent-refresh via `requestAccessToken({ prompt: '' })`. Interactive `authorize()` uses `prompt: 'consent'` on first grant.
+4. `createEvent(block)` → `POST calendar/v3/calendars/primary/events`; store returned `id` as `plannedBlock.calendarEventId`.
+5. `updateEvent(block)` → `PATCH …/events/{id}` when a synced block is edited.
+6. `deleteEvent(eventId)` → `DELETE …/events/{id}` when a synced block is deleted (or its "Add to Google Calendar" is unchecked).
+7. On 401 → clear cached token and retry once. On 403 → mark `status = 'needs_auth'` and surface a warning in the block form.
+
+**Color mapping** (`src/lib/calendarColors.ts`): Google Calendar has 11 fixed color IDs. Each `COURSE_COLORS` swatch is mapped to the visually-closest calendar color. Unmapped colors fall through to the calendar's default.
+
+**Env var**: `VITE_GOOGLE_CLIENT_ID` — an OAuth 2.0 Web client ID from Google Cloud Console. If empty, the "Add to Google Calendar" toggle still appears but shows a "not configured" warning instead of firing. Everything else works without it.
+
+**Background alarms (not in this feature)**: today's alarm only fires reliably while the tab is open. `docs/future-fcm-alarms.md` documents the FCM design for a follow-up PR.
 
 ## Routing
 
@@ -314,6 +373,10 @@ Firebase web-config keys are technically identifiers, not secrets — but keepin
 | Change how progress is calculated            | `progressFor` in both `CourseCard.tsx` and `CoursePage.tsx` (duplicated — keep them in sync) |
 | Change week start (Sun → Mon)                | `startOfWeek` in `src/lib/periods.ts`                        |
 | Add a new period kind (e.g. monthly)         | `PeriodKind` in `types.ts`, then `lib/periods.ts` functions, then goal-form UI |
+| Add a new time-goal preset (session/break)   | `DURATION_PRESETS` in `SessionTimer.tsx` or `BREAK_PRESETS` in `BreakTimer.tsx` |
+| Add a new dashboard range                    | `RANGES` array in `TimeDashboard.tsx` + a `rangeStart()` case |
+| Change the alarm chime                       | Drop a new `public/chime.mp3`; caller does not need editing  |
+| Change the calendar color mapping            | `COURSE_COLOR_TO_CALENDAR` in `src/lib/calendarColors.ts`    |
 | Add a new question status for practice tests | `QuestionStatus` union in `types.ts`, entries in `QUESTION_STATUS_META` and `QUESTION_STATUS_ORDER`, done-derivation in `useTasks.ts#updateQuestionStatus` |
 | Add a route                                  | Extend the `Route` union + `parseHash` in `src/hooks/useRoute.ts`, dispatch in `src/App.tsx` |
 | Change palette / spacing / radii             | `tailwind.config.js` + `src/index.css`                       |
@@ -324,9 +387,11 @@ Firebase web-config keys are technically identifiers, not secrets — but keepin
 ## Known limitations / roadmap
 
 - No streaks (consecutive weeks/days met) — history has the data; the UI doesn't render it yet.
-- No charts in `HistoryView` — just a list.
+- No charts in `HistoryView` — just a list. `TimeDashboard` has bars but no time-series graph.
 - No dark mode.
 - Bundle is ~750 KB (Firebase SDK dominant). Fine for now; can split with dynamic imports if first-paint matters.
 - Week start is hardcoded to Sunday (see periods.ts).
+- Alarms only fire reliably while the tab is open. Background push via FCM is documented in `docs/future-fcm-alarms.md`.
+- Google Calendar sync is one-way write only — the app does not read existing calendar events.
 
 If you're an AI agent picking this up: read this file, then `src/App.tsx` → `src/components/Dashboard.tsx` → whichever component you're touching. The data flow is small enough to hold in your head end-to-end.
