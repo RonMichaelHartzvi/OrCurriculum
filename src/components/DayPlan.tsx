@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Dialog } from './ui/Dialog'
 import { SessionTimer } from './SessionTimer'
 import type { Course, Goal, PlannedBlock, Session } from '../types'
@@ -72,6 +71,28 @@ function blockMinutes(b: PlannedBlock): number {
   return Math.max(0, (end - start) / 60000)
 }
 
+// Default calendar window; extended in 2-hour steps if blocks fall outside.
+const DEFAULT_START_HOUR = 9
+const DEFAULT_END_HOUR = 21
+const EXTEND_HOURS = 2
+
+interface PendingSave {
+  payload: {
+    courseId: string
+    title: string
+    startAt: Date
+    endAt: Date
+    notes?: string
+  }
+  syncToCalendar: boolean
+  editingId?: string
+  conflicts: PlannedBlock[]
+}
+
+function overlaps(aStart: number, aEnd: number, bStart: number, bEnd: number): boolean {
+  return aStart < bEnd && bStart < aEnd
+}
+
 export function DayPlan({
   courses,
   goals,
@@ -92,6 +113,7 @@ export function DayPlan({
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<PlannedBlock | null>(null)
   const [runningBlock, setRunningBlock] = useState<PlannedBlock | null>(null)
+  const [pending, setPending] = useState<PendingSave | null>(null)
 
   const filtered = useMemo(() => {
     return blocks
@@ -101,13 +123,22 @@ export function DayPlan({
 
   const sessionCourse = runningBlock ? courses.find((c) => c.id === runningBlock.courseId) : null
 
-  async function handleAdd(payload: {
-    courseId: string
-    title: string
-    startAt: Date
-    endAt: Date
-    notes?: string
-  }, syncToCalendar: boolean) {
+  function findConflicts(
+    startAt: Date,
+    endAt: Date,
+    ignoreId?: string
+  ): PlannedBlock[] {
+    const s = startAt.getTime()
+    const e = endAt.getTime()
+    return filtered.filter(
+      (b) => b.id !== ignoreId && overlaps(s, e, b.startAt.toMillis(), b.endAt.toMillis())
+    )
+  }
+
+  async function persistAdd(
+    payload: PendingSave['payload'],
+    syncToCalendar: boolean
+  ) {
     let calendarEventId: string | undefined
     if (syncToCalendar) {
       const course = courses.find((c) => c.id === payload.courseId) ?? null
@@ -117,15 +148,9 @@ export function DayPlan({
     await onAddBlock({ ...payload, calendarEventId })
   }
 
-  async function handleUpdate(
+  async function persistUpdate(
     block: PlannedBlock,
-    payload: {
-      courseId: string
-      title: string
-      startAt: Date
-      endAt: Date
-      notes?: string
-    },
+    payload: PendingSave['payload'],
     syncToCalendar: boolean
   ) {
     const course = courses.find((c) => c.id === payload.courseId) ?? null
@@ -137,7 +162,6 @@ export function DayPlan({
       await sync.deleteEvent(block.calendarEventId)
       calendarEventId = null
     } else if (syncToCalendar && block.calendarEventId) {
-      // Update the existing event in place.
       const synthetic = {
         ...block,
         title: payload.title,
@@ -151,6 +175,76 @@ export function DayPlan({
     const patch: Parameters<typeof onUpdateBlock>[1] = { ...payload }
     if (calendarEventId !== undefined) patch.calendarEventId = calendarEventId
     await onUpdateBlock(block.id, patch)
+  }
+
+  async function removeConflicts(conflicts: PlannedBlock[]) {
+    for (const c of conflicts) {
+      if (c.calendarEventId) {
+        try {
+          await sync.deleteEvent(c.calendarEventId)
+        } catch {
+          /* ignore */
+        }
+      }
+      await onRemoveBlock(c.id)
+    }
+  }
+
+  async function handleFormSave(
+    payload: PendingSave['payload'],
+    syncToCalendar: boolean,
+    editingBlock: PlannedBlock | null
+  ) {
+    const conflicts = findConflicts(payload.startAt, payload.endAt, editingBlock?.id)
+    if (conflicts.length > 0) {
+      setPending({
+        payload,
+        syncToCalendar,
+        editingId: editingBlock?.id,
+        conflicts
+      })
+      return
+    }
+    if (editingBlock) await persistUpdate(editingBlock, payload, syncToCalendar)
+    else await persistAdd(payload, syncToCalendar)
+  }
+
+  async function resolveConflict(action: 'merge' | 'replace') {
+    if (!pending) return
+    const { payload, syncToCalendar, editingId, conflicts } = pending
+
+    const editingBlock = editingId
+      ? blocks.find((b) => b.id === editingId) ?? null
+      : null
+
+    let finalPayload = payload
+    if (action === 'merge') {
+      // Extend the new block's range to cover the union with every conflict.
+      let start = payload.startAt.getTime()
+      let end = payload.endAt.getTime()
+      for (const c of conflicts) {
+        start = Math.min(start, c.startAt.toMillis())
+        end = Math.max(end, c.endAt.toMillis())
+      }
+      finalPayload = {
+        ...payload,
+        startAt: new Date(start),
+        endAt: new Date(end)
+      }
+    }
+
+    await removeConflicts(conflicts)
+    if (editingBlock && !conflicts.some((c) => c.id === editingBlock.id)) {
+      await persistUpdate(editingBlock, finalPayload, syncToCalendar)
+    } else {
+      // If editing block was itself removed as a conflict (shouldn't happen — we
+      // excluded it), or plain add path.
+      await persistAdd(finalPayload, syncToCalendar)
+    }
+
+    setPending(null)
+    setShowForm(false)
+    setEditing(null)
   }
 
   async function handleRemove(block: PlannedBlock) {
@@ -200,60 +294,15 @@ export function DayPlan({
         </div>
       )}
 
-      {filtered.length === 0 ? (
-        <div className="text-center text-berry/70 py-6">
-          <div className="text-3xl mb-2">📅</div>
-          Nothing planned yet.
-        </div>
-      ) : (
-        <ul className="space-y-2">
-          <AnimatePresence>
-            {filtered.map((b) => {
-              const course = courses.find((c) => c.id === b.courseId)
-              const mins = blockMinutes(b)
-              return (
-                <motion.li
-                  key={b.id}
-                  layout
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0 }}
-                  className="flex items-center gap-3 rounded-2xl bg-petal/40 px-3 py-2"
-                >
-                  <div
-                    className="w-2 self-stretch rounded-full"
-                    style={{ background: course?.color ?? '#F9A8D4' }}
-                  />
-                  <div className="flex-1 min-w-0">
-                    <div className="font-semibold text-berry text-sm truncate">
-                      {course?.emoji} {b.title}
-                    </div>
-                    <div className="text-xs text-berry/70">
-                      {fmtTime(b.startAt.toDate())} – {fmtTime(b.endAt.toDate())} ·{' '}
-                      {formatDuration(mins)}
-                      {b.calendarEventId && <> · 📅 synced</>}
-                    </div>
-                  </div>
-                  <button
-                    className="btn-primary text-xs px-3 py-1.5"
-                    disabled={Boolean(activeSession)}
-                    onClick={() => setRunningBlock(b)}
-                  >
-                    Start
-                  </button>
-                  <button
-                    className="btn-ghost text-xs"
-                    onClick={() => setEditing(b)}
-                    aria-label="Edit block"
-                  >
-                    ✎
-                  </button>
-                </motion.li>
-              )
-            })}
-          </AnimatePresence>
-        </ul>
-      )}
+      <CalendarGrid
+        date={date}
+        blocks={filtered}
+        courses={courses}
+        activeSession={activeSession}
+        compact={Boolean(compact)}
+        onEdit={(b) => setEditing(b)}
+        onStart={(b) => setRunningBlock(b)}
+      />
 
       <div className="pt-1">
         <button className="btn-soft text-sm" onClick={() => setShowForm(true)}>
@@ -270,7 +319,7 @@ export function DayPlan({
         calendarConfigured={sync.configured}
         onAuthorize={sync.authorize}
         onSave={async (payload, syncToCalendar) => {
-          await handleAdd(payload, syncToCalendar)
+          await handleFormSave(payload, syncToCalendar, null)
         }}
       />
 
@@ -285,13 +334,24 @@ export function DayPlan({
           calendarConfigured={sync.configured}
           onAuthorize={sync.authorize}
           onSave={async (payload, syncToCalendar) => {
-            await handleUpdate(editing, payload, syncToCalendar)
-            setEditing(null)
+            await handleFormSave(payload, syncToCalendar, editing)
           }}
           onDelete={async () => {
             await handleRemove(editing)
             setEditing(null)
           }}
+        />
+      )}
+
+      {pending && (
+        <ConflictDialog
+          open={Boolean(pending)}
+          onClose={() => setPending(null)}
+          conflicts={pending.conflicts}
+          courses={courses}
+          newRange={{ startAt: pending.payload.startAt, endAt: pending.payload.endAt }}
+          onMerge={() => resolveConflict('merge')}
+          onReplace={() => resolveConflict('replace')}
         />
       )}
 
@@ -310,6 +370,377 @@ export function DayPlan({
         />
       )}
     </div>
+  )
+}
+
+// ---------------- CalendarGrid ----------------
+
+interface GridProps {
+  date: Date
+  blocks: PlannedBlock[]
+  courses: Course[]
+  activeSession: Session | null
+  compact: boolean
+  onEdit: (b: PlannedBlock) => void
+  onStart: (b: PlannedBlock) => void
+}
+
+interface LaidOutBlock {
+  block: PlannedBlock
+  topPx: number
+  heightPx: number
+  col: number
+  colCount: number
+}
+
+function minutesSinceMidnight(d: Date, ref: Date): number {
+  // Clamp to [0, 24*60] within the reference day so cross-midnight blocks
+  // render truncated instead of overflowing.
+  const dayStart = new Date(ref)
+  dayStart.setHours(0, 0, 0, 0)
+  const mins = (d.getTime() - dayStart.getTime()) / 60000
+  return Math.max(0, Math.min(24 * 60, mins))
+}
+
+function layoutBlocks(blocks: PlannedBlock[]): Map<string, { col: number; colCount: number }> {
+  // Sweep: assign each block the lowest column index whose previous block
+  // ended before this one starts. Then, within each transitive-overlap
+  // cluster, everyone in the cluster shares the max column count for even
+  // side-by-side widths.
+  const sorted = [...blocks].sort(
+    (a, b) => a.startAt.toMillis() - b.startAt.toMillis()
+  )
+  const cols: number[] = [] // end time (ms) per column
+  const colOf = new Map<string, number>()
+  for (const b of sorted) {
+    const s = b.startAt.toMillis()
+    let col = cols.findIndex((end) => end <= s)
+    if (col === -1) col = cols.length
+    cols[col] = b.endAt.toMillis()
+    colOf.set(b.id, col)
+  }
+  // For each block, compute the peak column count among all blocks that
+  // overlap it (directly or transitively via a shared overlap).
+  const result = new Map<string, { col: number; colCount: number }>()
+  for (const b of sorted) {
+    const s = b.startAt.toMillis()
+    const e = b.endAt.toMillis()
+    let peak = (colOf.get(b.id) ?? 0) + 1
+    for (const o of sorted) {
+      if (o.id === b.id) continue
+      const os = o.startAt.toMillis()
+      const oe = o.endAt.toMillis()
+      if (overlaps(s, e, os, oe)) {
+        peak = Math.max(peak, (colOf.get(o.id) ?? 0) + 1)
+      }
+    }
+    result.set(b.id, { col: colOf.get(b.id) ?? 0, colCount: peak })
+  }
+  return result
+}
+
+function CalendarGrid({
+  date,
+  blocks,
+  courses,
+  activeSession,
+  compact,
+  onEdit,
+  onStart
+}: GridProps) {
+  const pxPerHour = compact ? 56 : 72
+  const railWidth = 56
+
+  // Derive the visible hour window: 9–21 by default, extended in 2h steps
+  // to cover any block that spills outside.
+  const [startHour, endHour] = useMemo(() => {
+    let startH = DEFAULT_START_HOUR
+    let endH = DEFAULT_END_HOUR
+    for (const b of blocks) {
+      const s = minutesSinceMidnight(b.startAt.toDate(), date) / 60
+      const e = minutesSinceMidnight(b.endAt.toDate(), date) / 60
+      if (s < startH) startH = Math.max(0, Math.floor(s) - EXTEND_HOURS)
+      if (e > endH) endH = Math.min(24, Math.ceil(e) + EXTEND_HOURS)
+    }
+    return [Math.max(0, startH), Math.min(24, endH)]
+  }, [blocks, date])
+
+  const totalMinutes = (endHour - startHour) * 60
+  const totalHeight = totalMinutes * (pxPerHour / 60)
+  const hours = useMemo(
+    () => Array.from({ length: endHour - startHour + 1 }, (_, i) => startHour + i),
+    [startHour, endHour]
+  )
+
+  const layout = useMemo(() => layoutBlocks(blocks), [blocks])
+
+  // Live "now" indicator — only shown when viewing today.
+  const [now, setNow] = useState(() => new Date())
+  useEffect(() => {
+    if (!sameDay(date, startOfDay(new Date()))) return
+    const id = window.setInterval(() => setNow(new Date()), 60_000)
+    return () => window.clearInterval(id)
+  }, [date])
+  const isToday = sameDay(date, startOfDay(new Date()))
+  const nowMinutes = isToday ? minutesSinceMidnight(now, date) : null
+  const nowTop =
+    nowMinutes != null && nowMinutes >= startHour * 60 && nowMinutes <= endHour * 60
+      ? (nowMinutes - startHour * 60) * (pxPerHour / 60)
+      : null
+
+  // Auto-scroll so "now" (or 9:00 default) is visible on first mount.
+  const scrollerRef = useRef<HTMLDivElement | null>(null)
+  const didInitScroll = useRef(false)
+  useEffect(() => {
+    if (didInitScroll.current) return
+    const el = scrollerRef.current
+    if (!el) return
+    const targetMinutes =
+      nowMinutes != null ? nowMinutes - 60 : DEFAULT_START_HOUR * 60 - startHour * 60
+    const top = Math.max(0, (targetMinutes - startHour * 60) * (pxPerHour / 60))
+    el.scrollTop = top
+    didInitScroll.current = true
+  }, [nowMinutes, startHour, pxPerHour])
+
+  const laid: LaidOutBlock[] = blocks.map((b) => {
+    const startMin = minutesSinceMidnight(b.startAt.toDate(), date)
+    const endMin = minutesSinceMidnight(b.endAt.toDate(), date)
+    const topPx = (startMin - startHour * 60) * (pxPerHour / 60)
+    const heightPx = Math.max(20, (endMin - startMin) * (pxPerHour / 60))
+    const l = layout.get(b.id) ?? { col: 0, colCount: 1 }
+    return { block: b, topPx, heightPx, col: l.col, colCount: l.colCount }
+  })
+
+  const maxViewport = compact ? 380 : 620
+
+  return (
+    <div
+      ref={scrollerRef}
+      className="rounded-3xl border border-petal/60 bg-white/70 overflow-y-auto"
+      style={{ maxHeight: maxViewport }}
+    >
+      <div className="relative" style={{ height: totalHeight, minHeight: 200 }}>
+        {/* Hour rail + horizontal lines */}
+        {hours.map((h, i) => {
+          const top = (h - startHour) * pxPerHour
+          const isLast = i === hours.length - 1
+          return (
+            <div key={h} className="absolute left-0 right-0" style={{ top }}>
+              <div
+                className={`absolute left-0 right-0 ${isLast ? '' : 'border-t border-petal/60'}`}
+              />
+              <span
+                className="absolute left-1 -top-2 text-[10px] font-semibold text-berry/60 tabular-nums"
+                style={{ width: railWidth - 8 }}
+              >
+                {h.toString().padStart(2, '0')}:00
+              </span>
+            </div>
+          )
+        })}
+        {/* Half-hour dashed lines */}
+        {hours.slice(0, -1).map((h) => {
+          const top = (h - startHour) * pxPerHour + pxPerHour / 2
+          return (
+            <div
+              key={`half-${h}`}
+              className="absolute border-t border-dashed border-petal/40"
+              style={{ top, left: railWidth, right: 4 }}
+            />
+          )
+        })}
+
+        {/* Now line */}
+        {nowTop != null && (
+          <div
+            className="absolute z-10 pointer-events-none"
+            style={{ top: nowTop, left: railWidth - 4, right: 4 }}
+          >
+            <div className="relative">
+              <div className="absolute -left-1 -top-1 w-2 h-2 rounded-full bg-deepRose shadow-sm" />
+              <div className="border-t-2 border-deepRose/80" />
+            </div>
+          </div>
+        )}
+
+        {/* Blocks */}
+        {laid.map(({ block: b, topPx, heightPx, col, colCount }) => {
+          const course = courses.find((c) => c.id === b.courseId)
+          const color = course?.color ?? '#F9A8D4'
+          const contentWidth = `calc((100% - ${railWidth + 8}px) / ${colCount})`
+          const left = `calc(${railWidth + 4}px + ${col} * ((100% - ${railWidth + 8}px) / ${colCount}))`
+          const mins = blockMinutes(b)
+          const tiny = heightPx < 34
+          const short = heightPx < 60
+          const synced = Boolean(b.calendarEventId)
+          return (
+            <div
+              key={b.id}
+              className="absolute rounded-2xl shadow-sm cursor-pointer overflow-hidden"
+              style={{
+                top: topPx + 1,
+                height: heightPx - 2,
+                left,
+                width: contentWidth,
+                background: `${color}66`,
+                borderLeft: `4px solid ${color}`
+              }}
+              onClick={() => onEdit(b)}
+              role="button"
+              tabIndex={0}
+            >
+              <div className="px-2.5 py-1.5 h-full flex flex-col gap-0.5 relative">
+                <div
+                  className={`font-semibold text-berry leading-tight break-words ${
+                    tiny ? 'text-xs line-clamp-1' : 'text-sm line-clamp-2'
+                  }`}
+                >
+                  {course?.emoji} {b.title}
+                </div>
+                {!short && (
+                  <div className="text-[11px] text-berry/80 leading-tight pr-16">
+                    {fmtTime(b.startAt.toDate())} – {fmtTime(b.endAt.toDate())} ·{' '}
+                    {formatDuration(mins)}
+                    {synced && <> · 📅</>}
+                  </div>
+                )}
+                {!tiny && (
+                  <button
+                    className="absolute bottom-1.5 right-1.5 rounded-full bg-deepRose/90 hover:bg-deepRose text-white text-[11px] font-semibold px-2 py-0.5 shadow-sm disabled:opacity-40"
+                    disabled={Boolean(activeSession)}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onStart(b)
+                    }}
+                  >
+                    ▶ Start
+                  </button>
+                )}
+              </div>
+            </div>
+          )
+        })}
+
+        {blocks.length === 0 && (
+          <div
+            className="absolute inset-0 flex items-center justify-center pointer-events-none"
+            style={{ left: railWidth }}
+          >
+            <div className="text-center text-berry/60">
+              <div className="text-2xl mb-1">📅</div>
+              <div className="text-xs">Nothing planned yet.</div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ---------------- ConflictDialog ----------------
+
+interface ConflictProps {
+  open: boolean
+  onClose: () => void
+  conflicts: PlannedBlock[]
+  courses: Course[]
+  newRange: { startAt: Date; endAt: Date }
+  onMerge: () => void | Promise<void>
+  onReplace: () => void | Promise<void>
+}
+
+function ConflictDialog({
+  open,
+  onClose,
+  conflicts,
+  courses,
+  newRange,
+  onMerge,
+  onReplace
+}: ConflictProps) {
+  const [busy, setBusy] = useState(false)
+  async function run(fn: () => void | Promise<void>) {
+    if (busy) return
+    setBusy(true)
+    try {
+      await fn()
+    } finally {
+      setBusy(false)
+    }
+  }
+  const mergedStart = new Date(
+    Math.min(
+      newRange.startAt.getTime(),
+      ...conflicts.map((c) => c.startAt.toMillis())
+    )
+  )
+  const mergedEnd = new Date(
+    Math.max(
+      newRange.endAt.getTime(),
+      ...conflicts.map((c) => c.endAt.toMillis())
+    )
+  )
+  return (
+    <Dialog open={open} onClose={onClose} title="Overlapping block">
+      <div className="space-y-4 text-sm text-berry/80">
+        <p>
+          This block overlaps {conflicts.length === 1 ? 'an existing block' : `${conflicts.length} existing blocks`}:
+        </p>
+        <ul className="space-y-1">
+          {conflicts.map((c) => {
+            const course = courses.find((cc) => cc.id === c.courseId)
+            return (
+              <li
+                key={c.id}
+                className="rounded-2xl bg-petal/40 px-3 py-2 flex items-center gap-2"
+              >
+                <span
+                  className="inline-block w-2 h-6 rounded-full"
+                  style={{ background: course?.color ?? '#F9A8D4' }}
+                />
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-berry truncate">
+                    {course?.emoji} {c.title}
+                  </div>
+                  <div className="text-xs text-berry/70">
+                    {fmtTime(c.startAt.toDate())} – {fmtTime(c.endAt.toDate())}
+                  </div>
+                </div>
+              </li>
+            )
+          })}
+        </ul>
+        <div className="rounded-2xl bg-cream/60 px-3 py-2 text-xs text-berry/80">
+          <div>
+            <strong>Merge</strong> replaces the existing {conflicts.length === 1 ? 'block' : 'blocks'} with a
+            single block covering <span className="tabular-nums">{fmtTime(mergedStart)} – {fmtTime(mergedEnd)}</span>.
+          </div>
+          <div className="mt-1">
+            <strong>Replace</strong> deletes the existing {conflicts.length === 1 ? 'block' : 'blocks'} and keeps
+            the new one exactly as entered.
+          </div>
+        </div>
+        <div className="grid grid-cols-3 gap-2 pt-1">
+          <button className="btn-soft" onClick={onClose} disabled={busy}>
+            Cancel
+          </button>
+          <button
+            className="btn-soft"
+            onClick={() => run(onMerge)}
+            disabled={busy}
+          >
+            Merge
+          </button>
+          <button
+            className="btn-primary"
+            onClick={() => run(onReplace)}
+            disabled={busy}
+          >
+            Replace
+          </button>
+        </div>
+      </div>
+    </Dialog>
   )
 }
 

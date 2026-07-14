@@ -8,6 +8,10 @@ interface DialogProps {
   title: string
   children: ReactNode
   size?: 'md' | 'lg'
+  // When false, the dialog cannot be closed by the X, ESC, or backdrop —
+  // only by whatever action the body triggers (used by the break popup so
+  // the user has to end the break to dismiss it).
+  dismissible?: boolean
 }
 
 const SIZE_CLASS: Record<NonNullable<DialogProps['size']>, string> = {
@@ -15,13 +19,20 @@ const SIZE_CLASS: Record<NonNullable<DialogProps['size']>, string> = {
   lg: 'max-w-2xl sm:min-h-[75vh]'
 }
 
-export function Dialog({ open, onClose, title, children, size = 'md' }: DialogProps) {
+export function Dialog({
+  open,
+  onClose,
+  title,
+  children,
+  size = 'md',
+  dismissible = true
+}: DialogProps) {
   useEffect(() => {
-    if (!open) return
+    if (!open || !dismissible) return
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [open, onClose])
+  }, [open, onClose, dismissible])
 
   if (typeof document === 'undefined') return null
 
@@ -38,7 +49,7 @@ export function Dialog({ open, onClose, title, children, size = 'md' }: DialogPr
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          onClick={onClose}
+          onClick={dismissible ? onClose : undefined}
         >
           <div className="min-h-full flex items-end sm:items-center justify-center p-3 sm:p-6">
             <motion.div
@@ -51,13 +62,15 @@ export function Dialog({ open, onClose, title, children, size = 'md' }: DialogPr
             >
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-display font-bold text-deepRose">{title}</h2>
-                <button
-                  className="btn-ghost text-2xl leading-none"
-                  onClick={onClose}
-                  aria-label="Close"
-                >
-                  ×
-                </button>
+                {dismissible && (
+                  <button
+                    className="btn-ghost text-2xl leading-none"
+                    onClick={onClose}
+                    aria-label="Close"
+                  >
+                    ×
+                  </button>
+                )}
               </div>
               {children}
             </motion.div>

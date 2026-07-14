@@ -160,15 +160,15 @@ Time-based goals reuse the same `entries` + `periodKey` model as count goals —
 - "End now & log" credits the actual elapsed minutes (rounded). Cancel writes no entry.
 - The `useWakeLock` hook keeps the screen awake while a session runs; it re-acquires on `visibilitychange` because browsers drop the lock when the tab hides. Sites gate on `active && !active.alarmedAt` — once the end-of-session/break chime has fired, the wake lock releases even if the user hasn't Log'd or Discarded, so a stale running session/break can't pin the display on.
 
-**Breaks** (`useBreak` + `BreakFab`): same lifecycle, no entry write. Break is top-level (not per course). The FAB lives on the dashboard bottom-left.
+**Breaks** (`useBreak` + `BreakFab`): same lifecycle, no entry write. Break is top-level (not per course). The FAB lives on the dashboard bottom-left. While a break is running (`active && !alarmed`), the break popup is rendered as **non-dismissible** via `Dialog`'s `dismissible={false}` prop — X, ESC, and backdrop clicks are all disabled and the popup auto-opens on remount. Safety valves so the user is never stuck: `handleEnd` calls `stopAlarm()` up front and the End button is never `disabled`; a local `alarmedLocal` echo unlocks the popup the instant the timer expires, even if the Firestore `markAlarmed` write is slow or fails; and once alarmed, the popup becomes fully dismissible again.
 
 **Manual time entry**: reuses `QuickAddSheet`. When `goal.unit === 'minutes'`, presets become `+15 / +30 / +60 / +90` and the custom input is minutes.
 
-**Day plan** (`usePlannedBlocks` + `DayPlan` + `PlanView`): planned time blocks live in `plannedBlocks`. The `DayPlan` component is used two ways:
-- **Compact** on `CoursePage.tsx` filtered to that course
-- **Full** on `PlanView.tsx` (top-level `#/plan` route) across all courses with a date navigator
+**Day plan** (`usePlannedBlocks` + `DayPlan` + `PlanView`): planned time blocks live in `plannedBlocks`. The `DayPlan` component is rendered from `PlanView.tsx` (top-level `#/plan` route) across all courses with a date navigator. It renders a Google-Calendar-style hour grid via the internal `CalendarGrid` sub-component: `9:00–21:00` by default, auto-extending in 2-hour steps to cover any block that falls outside. Overlapping blocks lay out side-by-side using a sweep column assignment; on today, a live `deepRose` "now" line is drawn and the grid auto-scrolls to ~1 h before now on first mount.
 
-Each block has a "Start" button that mounts `SessionTimer` with duration pre-filled from the block's length. Editing a block updates its calendar event too (if it was synced); deleting removes the calendar event.
+Each block is tappable (opens edit) and has a small "▶ Start" pill (bottom-right) that mounts `SessionTimer` with duration pre-filled from the block's length. Editing a block updates its calendar event too (if it was synced); deleting removes the calendar event.
+
+**Overlap prompt**: when a new/edited block's time range overlaps any existing block in the current day + course-filter scope, `ConflictDialog` opens with Cancel / Merge / Replace. **Merge** deletes the conflicting blocks and creates one that spans `min(start) … max(end)` with the new block's course/title/notes. **Replace** deletes the conflicting blocks and keeps the new one exactly as entered. Calendar-synced conflicts get their Google Calendar events deleted too.
 
 **Time dashboard** (`TimeDashboard`, `#/time`): 4 range chips (7d / 30d / 90d / all-time). Sums entries by `at` timestamp and includes archived `history` records (using each history record's period midpoint for date-bucketing) so all-time is complete. Daily average = total ÷ days in window.
 
