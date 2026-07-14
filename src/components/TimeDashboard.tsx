@@ -97,7 +97,30 @@ export function TimeDashboard({ user }: { user: User }) {
       }
       return Math.max(dates.size, 1)
     }
-    return range === '7d' ? 7 : range === '30d' ? 30 : 90
+
+    const rangeDays = range === '7d' ? 7 : range === '30d' ? 30 : 90
+
+    // Cap at the number of days since the user first logged time, so new
+    // users aren't penalized by empty days before they started time-tracking.
+    // Only consider time entries — count entries (questions etc.) may predate
+    // time tracking and would inflate the denominator.
+    let earliest: Date | null = null
+    for (const e of entries) {
+      if (entryMinutes(e) <= 0) continue
+      const d = entryDate(e)
+      if (d && (!earliest || d < earliest)) earliest = d
+    }
+    for (const h of history) {
+      if (historyMinutes(h) <= 0) continue
+      const d = historyMidpoint(h)
+      if (d && (!earliest || d < earliest)) earliest = d
+    }
+    if (!earliest) return rangeDays
+
+    const today = startOfDay(new Date())
+    const firstDay = startOfDay(earliest)
+    const daysSinceFirst = Math.round((today.getTime() - firstDay.getTime()) / (1000 * 60 * 60 * 24)) + 1
+    return Math.min(rangeDays, Math.max(1, daysSinceFirst))
   }, [range, entries, history])
 
   const dailyAvg = total / dayCount
