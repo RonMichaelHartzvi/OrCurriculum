@@ -10,6 +10,7 @@ interface Props {
   onAddRegular: (title: string) => Promise<void>
   onAddPracticeTest: (data: { title: string; questionCount: number }) => Promise<void>
   onToggle: (id: string, done: boolean) => Promise<void>
+  onToggleGoal: (id: string, isGoal: boolean) => Promise<void>
   onEdit: (id: string, title: string) => Promise<void>
   onRemove: (id: string) => Promise<void>
   onUpdateQuestion: (task: Task, index: number, status: QuestionStatus, note: string) => Promise<void>
@@ -24,6 +25,7 @@ export function TaskList({
   onAddRegular,
   onAddPracticeTest,
   onToggle,
+  onToggleGoal,
   onEdit,
   onRemove,
   onUpdateQuestion,
@@ -78,6 +80,7 @@ export function TaskList({
           onReset={onResetPracticeTest}
           onEditTitle={onEdit}
           onRemove={onRemove}
+          onToggleGoal={(isGoal) => onToggleGoal(t.id, isGoal)}
         />
       )
     }
@@ -100,6 +103,7 @@ export function TaskList({
         }}
         onToggle={() => onToggle(t.id, !t.done)}
         onRemove={() => onRemove(t.id)}
+        onToggleGoal={() => onToggleGoal(t.id, !t.isGoal)}
       />
     )
   }
@@ -171,6 +175,7 @@ interface RowProps {
   onCancelEdit: () => void
   onToggle: () => void
   onRemove: () => void
+  onToggleGoal: () => void
 }
 
 function TaskRow({
@@ -183,7 +188,8 @@ function TaskRow({
   onCommitEdit,
   onCancelEdit,
   onToggle,
-  onRemove
+  onRemove,
+  onToggleGoal
 }: RowProps) {
   return (
     <motion.li
@@ -253,6 +259,18 @@ function TaskRow({
           {task.title}
         </button>
       )}
+
+      <button
+        onClick={onToggleGoal}
+        className={`shrink-0 transition text-lg px-1 ${
+          task.isGoal
+            ? 'text-berry'
+            : 'opacity-0 group-hover:opacity-100 focus:opacity-100 text-berry/40 hover:text-berry'
+        }`}
+        aria-label={task.isGoal ? 'Remove from goals' : 'Set as goal'}
+      >
+        {task.isGoal ? '★' : '☆'}
+      </button>
 
       <button
         onClick={onRemove}

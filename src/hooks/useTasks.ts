@@ -110,6 +110,11 @@ export function useTasks(uid: string | null) {
     await updateDoc(doc(db, 'users', uid, 'tasks', id), { title })
   }
 
+  async function toggleTaskGoal(id: string, isGoal: boolean) {
+    if (!uid) return
+    await updateDoc(doc(db, 'users', uid, 'tasks', id), { isGoal })
+  }
+
   async function removeTask(id: string) {
     if (!uid) return
     await deleteDoc(doc(db, 'users', uid, 'tasks', id))
@@ -121,6 +126,7 @@ export function useTasks(uid: string | null) {
     addTask,
     addPracticeTest,
     toggleTask,
+    toggleTaskGoal,
     updateTaskTitle,
     updateQuestionStatus,
     resetPracticeTest,

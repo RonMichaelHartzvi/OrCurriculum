@@ -22,7 +22,7 @@ export function Dashboard({ user }: { user: User }) {
   const { courses, addCourse } = useCourses(uid)
   const { goals, addGoal } = useGoals(uid)
   const { entries, addEntry } = useEntries(uid)
-  const { tasks } = useTasks(uid)
+  const { tasks, toggleTask, toggleTaskGoal, updateQuestionStatus, resetPracticeTest } = useTasks(uid)
   const { all: sessions, discardSession, discardEntry } = useSessions(uid)
 
   const [showNewCourse, setShowNewCourse] = useState(false)
@@ -47,6 +47,16 @@ export function Dashboard({ user }: { user: User }) {
     for (const t of tasks) {
       if (t.done) continue
       m.set(t.courseId, (m.get(t.courseId) ?? 0) + 1)
+    }
+    return m
+  }, [tasks])
+
+  const taskGoalsByCourse = useMemo(() => {
+    const m = new Map<string, typeof tasks>()
+    for (const t of tasks) {
+      if (!t.isGoal) continue
+      if (!m.has(t.courseId)) m.set(t.courseId, [])
+      m.get(t.courseId)!.push(t)
     }
     return m
   }, [tasks])
@@ -100,6 +110,7 @@ export function Dashboard({ user }: { user: User }) {
                     course={c}
                     goals={goalsByCourse.get(c.id) ?? []}
                     entries={entries}
+                    taskGoals={taskGoalsByCourse.get(c.id) ?? []}
                     onOpen={() => openCourse(c.id)}
                     onAddGoal={(data) => addGoal({ courseId: c.id, ...data })}
                     onLog={(goal, amount) =>
@@ -111,6 +122,12 @@ export function Dashboard({ user }: { user: User }) {
                         periodKey: periodKey(goal.period as PeriodKind)
                       })
                     }
+                    onToggle={(id, done) => toggleTask(id, done)}
+                    onToggleGoal={(id, isGoal) => toggleTaskGoal(id, isGoal)}
+                    onUpdateQuestion={(task, index, status, note) =>
+                      updateQuestionStatus(task, index, status, note)
+                    }
+                    onResetPracticeTest={(task) => resetPracticeTest(task)}
                     openTaskCount={openTasksByCourse.get(c.id) ?? 0}
                   />
                 </motion.div>
