@@ -15,6 +15,7 @@ interface Props {
   onReset: (task: Task) => Promise<void>
   onEditTitle: (id: string, title: string) => Promise<void>
   onRemove: (id: string) => Promise<void>
+  onToggleGoal: (isGoal: boolean) => void
 }
 
 export function PracticeTestRow({
@@ -23,7 +24,8 @@ export function PracticeTestRow({
   onUpdateQuestion,
   onReset,
   onEditTitle,
-  onRemove
+  onRemove,
+  onToggleGoal
 }: Props) {
   const [expanded, setExpanded] = useState(false)
   const [editing, setEditing] = useState(false)
@@ -124,6 +126,17 @@ export function PracticeTestRow({
           >
             ⌄
           </motion.span>
+        </button>
+        <button
+          onClick={() => onToggleGoal(!task.isGoal)}
+          className={`shrink-0 w-8 h-8 rounded-full transition text-lg flex items-center justify-center ${
+            task.isGoal
+              ? 'text-berry bg-petal/40'
+              : 'text-berry/40 hover:text-berry hover:bg-petal/40 opacity-0 group-hover:opacity-100 focus:opacity-100'
+          }`}
+          aria-label={task.isGoal ? 'Remove from goals' : 'Set as goal'}
+        >
+          {task.isGoal ? '★' : '☆'}
         </button>
         <button
           onClick={() => onRemove(task.id)}

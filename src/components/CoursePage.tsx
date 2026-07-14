@@ -44,6 +44,7 @@ export function CoursePage({ user, courseId }: Props) {
     addTask,
     addPracticeTest,
     toggleTask,
+    toggleTaskGoal,
     updateTaskTitle,
     updateQuestionStatus,
     resetPracticeTest,
@@ -77,6 +78,10 @@ export function CoursePage({ user, courseId }: Props) {
   const courseLinks = useMemo(
     () => links.filter((l) => l.courseId === courseId),
     [links, courseId]
+  )
+  const taskGoals = useMemo(
+    () => courseTasks.filter((t) => t.isGoal),
+    [courseTasks]
   )
   const courseHistory = useMemo(
     () =>
@@ -217,10 +222,10 @@ export function CoursePage({ user, courseId }: Props) {
               ▶ Start session
             </button>
           </div>
-          {courseGoals.length === 0 ? (
+          {courseGoals.length === 0 && taskGoals.length === 0 ? (
             <div className="text-center text-berry/70 py-8">
               <div className="text-3xl mb-2">🎯</div>
-              No goals yet. Tap "Add goal" to set a target.
+              No goals yet. Tap "Add goal" to set a target, or star a task to make it a one-time goal.
             </div>
           ) : (
             <div className="space-y-5">
@@ -265,6 +270,61 @@ export function CoursePage({ user, courseId }: Props) {
                   </motion.div>
                 )
               })}
+
+              {taskGoals.length > 0 && (
+                <>
+                  {courseGoals.length > 0 && (
+                    <div className="border-t border-petal/40" />
+                  )}
+                  <div className="text-xs font-semibold text-berry/50 uppercase tracking-wide">
+                    One-time
+                  </div>
+                  <div className="space-y-3">
+                    {taskGoals.map((t) => {
+                      const isPT = t.type === 'practiceTest'
+                      const questions = t.questions ?? []
+                      const total = questions.length || t.questionCount || 1
+                      const answered = questions.filter(
+                        (q) => q === 'succeeded' || q === 'failed'
+                      ).length
+                      const value = isPT ? answered : t.done ? 1 : 0
+                      const target = isPT ? total : 1
+                      const ringLabel = isPT ? `${answered}/${total}` : t.done ? 'Done' : 'Open'
+                      const ringSublabel = isPT ? 'practice test' : 'task'
+                      return (
+                        <motion.div
+                          key={t.id}
+                          layout
+                          className="flex items-center gap-5 rounded-3xl bg-blush/50 p-4"
+                        >
+                          <RingProgress
+                            value={value}
+                            target={target}
+                            color={course.color}
+                            size={124}
+                            strokeWidth={12}
+                            label={ringLabel}
+                            sublabel={ringSublabel}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold text-berry leading-snug">{t.title}</p>
+                            <div className="flex flex-wrap items-center gap-2 mt-1.5">
+                              <span className="chip">One-time ★</span>
+                              {isPT && <span className="chip">Practice test</span>}
+                            </div>
+                            <button
+                              className="btn-ghost text-xs mt-2"
+                              onClick={() => toggleTaskGoal(t.id, false)}
+                            >
+                              Remove from goals
+                            </button>
+                          </div>
+                        </motion.div>
+                      )
+                    })}
+                  </div>
+                </>
+              )}
             </div>
           )}
         </section>
@@ -280,6 +340,7 @@ export function CoursePage({ user, courseId }: Props) {
               addPracticeTest({ courseId, title, questionCount })
             }
             onToggle={(id, done) => toggleTask(id, done)}
+            onToggleGoal={(id, isGoal) => toggleTaskGoal(id, isGoal)}
             onEdit={(id, title) => updateTaskTitle(id, title)}
             onRemove={(id) => removeTask(id)}
             onUpdateQuestion={(task, index, status, note) =>

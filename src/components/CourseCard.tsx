@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-import type { Course, Entry, Goal, GoalUnit, PeriodKind } from '../types'
+import type { Course, Entry, Goal, GoalUnit, PeriodKind, QuestionStatus, Task } from '../types'
 import { RingProgress } from './RingProgress'
 import { QuickAddSheet } from './QuickAddSheet'
 import { GoalFormDialog } from './GoalFormDialog'
+import { PracticeTestInteractDialog } from './PracticeTestInteractDialog'
 import { formatPeriodRange } from '../lib/periods'
 import { formatDuration } from '../lib/time'
 import { computeProgress } from '../lib/progress'
@@ -18,6 +19,7 @@ interface Props {
   course: Course
   goals: Goal[]
   entries: Entry[]
+  taskGoals?: Task[]
   onOpen: () => void
   onAddGoal: (data: {
     metric: string
@@ -26,6 +28,10 @@ interface Props {
     unit: GoalUnit
   }) => Promise<void>
   onLog: (goal: Goal, amount: number) => Promise<void>
+  onToggle: (id: string, done: boolean) => Promise<void>
+  onToggleGoal: (id: string, isGoal: boolean) => Promise<void>
+  onUpdateQuestion: (task: Task, index: number, status: QuestionStatus, note: string) => Promise<void>
+  onResetPracticeTest: (task: Task) => Promise<void>
   openTaskCount?: number
 }
 
@@ -33,13 +39,22 @@ export function CourseCard({
   course,
   goals,
   entries,
+  taskGoals = [],
   onOpen,
   onAddGoal,
   onLog,
+  onToggle,
+  onToggleGoal,
+  onUpdateQuestion,
+  onResetPracticeTest,
   openTaskCount
 }: Props) {
   const [showGoalForm, setShowGoalForm] = useState(false)
   const [logGroup, setLogGroup] = useState<LogGroup | null>(null)
+  const [activePracticeTestId, setActivePracticeTestId] = useState<string | null>(null)
+  const activePracticeTest = activePracticeTestId
+    ? (taskGoals.find((t) => t.id === activePracticeTestId) ?? null)
+    : null
 
   const progressFor = (goal: Goal) => computeProgress(goal, entries)
 
@@ -104,7 +119,7 @@ export function CourseCard({
         <div className="text-berry/40 text-xl leading-none pt-1">›</div>
       </div>
 
-      {goals.length === 0 ? (
+      {goals.length === 0 && taskGoals.length === 0 ? (
         <div className="mt-5 flex flex-col items-center gap-2 py-4 text-center">
           <div className="text-berry/60 text-sm">No goals yet.</div>
           <button className="btn-primary" onClick={stop(() => setShowGoalForm(true))}>
@@ -142,21 +157,100 @@ export function CourseCard({
               </div>
             )
           })}
-          <div className="flex flex-wrap gap-2">
-            {logGroups.map((group) => {
-              const label =
-                group.unit === 'minutes' ? 'study time' : group.metric
-              return (
-                <button
-                  key={`${group.unit}|${group.metric}`}
-                  className="btn-primary text-sm"
-                  onClick={stop(() => setLogGroup(group))}
+
+          {taskGoals.map((t) => {
+            const isPT = t.type === 'practiceTest'
+            const questions = t.questions ?? []
+            const total = questions.length || t.questionCount || 1
+            const answered = questions.filter(
+              (q) => q === 'succeeded' || q === 'failed'
+            ).length
+            const value = isPT ? answered : t.done ? 1 : 0
+            const target = isPT ? total : 1
+            const label = isPT ? `${answered}/${total}` : t.done ? 'Done' : 'Open'
+            const sublabel = isPT ? 'practice test' : 'task'
+            return (
+              <div
+                key={t.id}
+                className={`flex items-center gap-4 rounded-2xl transition -mx-2 px-2 py-1 ${
+                  isPT ? 'cursor-pointer hover:bg-petal/30' : ''
+                }`}
+                onClick={isPT ? stop(() => setActivePracticeTestId(t.id)) : undefined}
+              >
+                <RingProgress
+                  value={value}
+                  target={target}
+                  color={course.color}
+                  size={110}
+                  strokeWidth={10}
+                  label={label}
+                  sublabel={sublabel}
+                />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-berry leading-snug line-clamp-2">
+                    {t.title}
+                  </p>
+                  <span className="chip text-xs mt-1 inline-block">One-time ★</span>
+                </div>
+                <div
+                  className="flex flex-col items-center gap-2 shrink-0"
+                  onClick={(e) => e.stopPropagation()}
                 >
-                  + Log {label}
-                </button>
-              )
-            })}
-          </div>
+                  {!isPT && (
+                    <button
+                      onClick={stop(() => onToggle(t.id, !t.done))}
+                      aria-label={t.done ? 'Mark as not done' : 'Mark as done'}
+                      className={`w-7 h-7 rounded-full border-2 flex items-center justify-center transition ${
+                        t.done ? 'text-white' : 'bg-white hover:bg-petal/40'
+                      }`}
+                      style={
+                        t.done
+                          ? { background: course.color, borderColor: course.color }
+                          : { borderColor: course.color }
+                      }
+                    >
+                      {t.done && (
+                        <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
+                          <path
+                            d="M5 10.5l3.5 3.5L15 6.5"
+                            stroke="currentColor"
+                            strokeWidth="3"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      )}
+                    </button>
+                  )}
+                  <button
+                    onClick={stop(() => onToggleGoal(t.id, false))}
+                    aria-label="Remove from goals"
+                    className="text-berry hover:text-deepRose transition text-lg leading-none"
+                  >
+                    ★
+                  </button>
+                </div>
+              </div>
+            )
+          })}
+
+          {goals.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {logGroups.map((group) => {
+                const label =
+                  group.unit === 'minutes' ? 'study time' : group.metric
+                return (
+                  <button
+                    key={`${group.unit}|${group.metric}`}
+                    className="btn-primary text-sm"
+                    onClick={stop(() => setLogGroup(group))}
+                  >
+                    + Log {label}
+                  </button>
+                )
+              })}
+            </div>
+          )}
         </div>
       )}
 
@@ -189,6 +283,14 @@ export function CourseCard({
           }}
         />
       )}
+
+      <PracticeTestInteractDialog
+        task={activePracticeTest}
+        color={course.color}
+        onUpdateQuestion={onUpdateQuestion}
+        onReset={onResetPracticeTest}
+        onClose={() => setActivePracticeTestId(null)}
+      />
     </motion.div>
   )
 }

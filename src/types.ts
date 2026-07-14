@@ -49,6 +49,7 @@ export interface Task {
   questionCount?: number
   questions?: QuestionStatus[]
   questionNotes?: string[]
+  isGoal?: boolean
 }
 
 export interface QuestionStatusMeta {
