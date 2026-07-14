@@ -6,6 +6,7 @@ import { useGoals } from '../hooks/useGoals'
 import { useEntries } from '../hooks/useEntries'
 import { useHistory } from '../hooks/useHistory'
 import { useTasks } from '../hooks/useTasks'
+import { useLinks } from '../hooks/useLinks'
 import { useSession } from '../hooks/useSession'
 import { openDashboard } from '../hooks/useRoute'
 import { archivePastPeriods } from '../lib/archive'
@@ -17,6 +18,7 @@ import { QuickAddSheet } from './QuickAddSheet'
 import { CourseFormDialog } from './CourseFormDialog'
 import { GoalFormDialog } from './GoalFormDialog'
 import { TaskList } from './TaskList'
+import { LinkList } from './LinkList'
 import { SessionTimer } from './SessionTimer'
 import type { Goal, GoalUnit, PeriodKind } from '../types'
 
@@ -47,6 +49,7 @@ export function CoursePage({ user, courseId }: Props) {
     resetPracticeTest,
     removeTask
   } = useTasks(uid)
+  const { links, addLink, updateLink, removeLink } = useLinks(uid)
 
   const [showEditCourse, setShowEditCourse] = useState(false)
   const [showNewGoal, setShowNewGoal] = useState(false)
@@ -70,6 +73,10 @@ export function CoursePage({ user, courseId }: Props) {
   const courseTasks = useMemo(
     () => tasks.filter((t) => t.courseId === courseId),
     [tasks, courseId]
+  )
+  const courseLinks = useMemo(
+    () => links.filter((l) => l.courseId === courseId),
+    [links, courseId]
   )
   const courseHistory = useMemo(
     () =>
@@ -266,6 +273,17 @@ export function CoursePage({ user, courseId }: Props) {
               updateQuestionStatus(task, index, status, note)
             }
             onResetPracticeTest={(task) => resetPracticeTest(task)}
+          />
+        </section>
+
+        {/* Links section */}
+        <section className="card p-6">
+          <SectionHeader title="Links" subtitle="Useful resources for this course." />
+          <LinkList
+            links={courseLinks}
+            onAdd={(data) => addLink({ courseId, ...data })}
+            onUpdate={(id, data) => updateLink(id, data)}
+            onRemove={(id) => removeLink(id)}
           />
         </section>
 
