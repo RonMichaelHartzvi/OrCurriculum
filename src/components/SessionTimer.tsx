@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Dialog } from './ui/Dialog'
 import { RingProgress } from './RingProgress'
 import type { Course, Goal, Session } from '../types'
@@ -11,9 +11,7 @@ interface Props {
   open: boolean
   onClose: () => void
   course: Course
-  goals: Goal[]
   active: Session | null
-  initialGoalId?: string | null
   initialMinutes?: number
   onStart: (input: {
     courseId: string
@@ -29,21 +27,13 @@ export function SessionTimer({
   open,
   onClose,
   course,
-  goals,
   active,
-  initialGoalId,
   initialMinutes,
   onStart,
   onComplete,
   onCancel,
   onEndNow
 }: Props) {
-  const timeGoals = useMemo(
-    () => goals.filter((g) => g.unit === 'minutes' && g.courseId === course.id),
-    [goals, course.id]
-  )
-
-  const [goalId, setGoalId] = useState<string | null>(initialGoalId ?? timeGoals[0]?.id ?? null)
   const [minutes, setMinutes] = useState<number>(initialMinutes ?? 60)
   const [customMin, setCustomMin] = useState<string>('')
   const [now, setNow] = useState<number>(Date.now())
@@ -62,10 +52,9 @@ export function SessionTimer({
 
   useEffect(() => {
     if (!open) return
-    setGoalId(initialGoalId ?? timeGoals[0]?.id ?? null)
     setMinutes(initialMinutes ?? 60)
     setCustomMin('')
-  }, [open, initialGoalId, initialMinutes, timeGoals])
+  }, [open, initialMinutes])
 
   useEffect(() => {
     if (!isActiveForThisCourse) return
@@ -88,8 +77,6 @@ export function SessionTimer({
   }, [active, course.id, now, askConfirm])
 
 
-  const linkedGoal = goals.find((g) => g.id === goalId) ?? null
-
   async function handleStart() {
     if (starting) return
     setStarting(true)
@@ -103,7 +90,7 @@ export function SessionTimer({
     try {
       await onStart({
         courseId: course.id,
-        goalId,
+        goalId: null,
         plannedMinutes: minutes
       })
       // Success: close the setup modal so the persistent SessionBanner takes
@@ -120,14 +107,14 @@ export function SessionTimer({
   async function handleConfirm() {
     if (!askConfirm) return
     stopAlarm()
-    await onComplete(askConfirm, linkedGoal, Math.max(0, Math.round(logAmount)))
+    await onComplete(askConfirm, null, Math.max(0, Math.round(logAmount)))
     setAskConfirm(null)
     onClose()
   }
 
   async function handleEndNow() {
     if (!active) return
-    await onEndNow(active, linkedGoal)
+    await onEndNow(active, null)
     onClose()
   }
 
@@ -202,9 +189,8 @@ export function SessionTimer({
     return (
       <Dialog open={open} onClose={onClose} title="Study session">
         <div className="space-y-5 flex flex-col items-center">
-          <div className="text-sm text-berry/80 text-center">
-            <span className="font-semibold">{course.name}</span>
-            {linkedGoal && <> · toward {formatDuration(linkedGoal.target)} {linkedGoal.period}</>}
+          <div className="text-sm text-berry/80 text-center font-semibold">
+            {course.name}
           </div>
           <RingProgress
             value={elapsed}
@@ -238,25 +224,6 @@ export function SessionTimer({
         {active && active.courseId !== course.id && (
           <div className="text-sm text-berry/80 bg-petal/40 rounded-2xl px-3 py-2">
             A session is already running on another course. Finish or cancel it first.
-          </div>
-        )}
-        {timeGoals.length > 0 && (
-          <div>
-            <label className="text-xs font-semibold text-berry/80 uppercase tracking-wide">
-              Toward goal
-            </label>
-            <select
-              className="input mt-1"
-              value={goalId ?? ''}
-              onChange={(e) => setGoalId(e.target.value || null)}
-            >
-              <option value="">Just track time (no goal)</option>
-              {timeGoals.map((g) => (
-                <option key={g.id} value={g.id}>
-                  {formatDuration(g.target)} · {g.period}
-                </option>
-              ))}
-            </select>
           </div>
         )}
         <div>

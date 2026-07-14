@@ -103,7 +103,24 @@ export function CoursePage({ user, courseId }: Props) {
     }
     return Array.from(map.values())
   }, [courseGoals])
-  const hasTimeGoal = logGroups.some((g) => g.unit === 'minutes')
+  const hasTimeGoals = courseGoals.some((g) => (g.unit ?? 'count') === 'minutes')
+
+  async function handleStartSession(input: {
+    courseId: string
+    goalId: string | null
+    plannedMinutes: number
+  }) {
+    if (!hasTimeGoals) {
+      await addGoal({
+        courseId,
+        metric: 'minutes',
+        target: 1,
+        period: 'daily',
+        unit: 'minutes'
+      })
+    }
+    await startSession(input)
+  }
 
   useEffect(() => {
     if (courseGoals.length) {
@@ -178,81 +195,77 @@ export function CoursePage({ user, courseId }: Props) {
               </button>
             }
           />
+          <div className="mb-5 flex flex-wrap gap-2">
+            {logGroups.map((group) => {
+              const label =
+                group.unit === 'minutes' ? 'study time' : group.metric
+              return (
+                <button
+                  key={`${group.unit}|${group.metric}`}
+                  className="btn-primary text-sm"
+                  onClick={() => setLogGroup(group)}
+                >
+                  + Log {label}
+                </button>
+              )
+            })}
+            <button
+              className="btn-soft text-sm"
+              onClick={() => setSessionForGoal('freeform')}
+              disabled={Boolean(activeSession && activeSession.courseId !== courseId)}
+            >
+              ▶ Start session
+            </button>
+          </div>
           {courseGoals.length === 0 ? (
             <div className="text-center text-berry/70 py-8">
               <div className="text-3xl mb-2">🎯</div>
-              No goals yet. Tap “Add goal” to set a target.
+              No goals yet. Tap "Add goal" to set a target.
             </div>
           ) : (
-            <>
-              <div className="mb-5 flex flex-wrap gap-2">
-                {logGroups.map((group) => {
-                  const label =
-                    group.unit === 'minutes' ? 'study time' : group.metric
-                  return (
-                    <button
-                      key={`${group.unit}|${group.metric}`}
-                      className="btn-primary text-sm"
-                      onClick={() => setLogGroup(group)}
-                    >
-                      + Log {label}
-                    </button>
-                  )
-                })}
-                {hasTimeGoal && (
-                  <button
-                    className="btn-soft text-sm"
-                    onClick={() => setSessionForGoal('freeform')}
-                    disabled={Boolean(activeSession && activeSession.courseId !== courseId)}
+            <div className="space-y-5">
+              {courseGoals.map((g) => {
+                const p = progressFor(g)
+                const isTime = g.unit === 'minutes'
+                const ringLabel = isTime
+                  ? `${formatDuration(p)} / ${formatDuration(g.target)}`
+                  : `${p} / ${g.target}`
+                const ringSublabel = isTime ? 'study time' : g.metric
+                return (
+                  <motion.div
+                    key={g.id}
+                    layout
+                    className="flex items-center gap-5 rounded-3xl bg-blush/50 p-4"
                   >
-                    ▶ Start session
-                  </button>
-                )}
-              </div>
-              <div className="space-y-5">
-                {courseGoals.map((g) => {
-                  const p = progressFor(g)
-                  const isTime = g.unit === 'minutes'
-                  const ringLabel = isTime
-                    ? `${formatDuration(p)} / ${formatDuration(g.target)}`
-                    : `${p} / ${g.target}`
-                  const ringSublabel = isTime ? 'study time' : g.metric
-                  return (
-                    <motion.div
-                      key={g.id}
-                      layout
-                      className="flex items-center gap-5 rounded-3xl bg-blush/50 p-4"
-                    >
-                      <RingProgress
-                        value={p}
-                        target={g.target}
-                        color={course.color}
-                        size={124}
-                        strokeWidth={12}
-                        label={ringLabel}
-                        sublabel={ringSublabel}
-                      />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="chip capitalize">{g.period}</span>
-                          <span className="text-xs text-berry/60">
-                            {formatPeriodRange(g.period)}
-                          </span>
-                        </div>
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          <button
-                            className="btn-soft text-sm"
-                            onClick={() => setEditingGoal(g)}
-                          >
-                            Edit
-                          </button>
-                        </div>
+                    <RingProgress
+                      value={p}
+                      target={g.target}
+                      color={course.color}
+                      size={124}
+                      strokeWidth={12}
+                      label={ringLabel}
+                      sublabel={ringSublabel}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="chip capitalize">{g.period}</span>
+                        <span className="text-xs text-berry/60">
+                          {formatPeriodRange(g.period)}
+                        </span>
                       </div>
-                    </motion.div>
-                  )
-                })}
-              </div>
-            </>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <button
+                          className="btn-soft text-sm"
+                          onClick={() => setEditingGoal(g)}
+                        >
+                          Edit
+                        </button>
+                      </div>
+                    </div>
+                  </motion.div>
+                )
+              })}
+            </div>
           )}
         </section>
 
@@ -370,10 +383,8 @@ export function CoursePage({ user, courseId }: Props) {
           open={Boolean(sessionForGoal)}
           onClose={() => setSessionForGoal(null)}
           course={course}
-          goals={courseGoals}
           active={activeSession}
-          initialGoalId={sessionForGoal === 'freeform' ? null : sessionForGoal.id}
-          onStart={startSession}
+          onStart={handleStartSession}
           onComplete={completeSession}
           onCancel={cancelSession}
           onEndNow={endNowSession}
