@@ -137,6 +137,14 @@ export interface PlannedBlock {
   createdAt: Timestamp | null
 }
 
+export interface CourseLink {
+  id: string
+  courseId: string
+  url: string
+  label: string
+  createdAt: Timestamp | null
+}
+
 export interface HistoryRecord {
   id: string
   courseId: string
