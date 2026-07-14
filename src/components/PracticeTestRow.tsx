@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Dialog } from './ui/Dialog'
 import {
@@ -11,7 +11,7 @@ import {
 interface Props {
   task: Task
   color: string
-  onUpdateQuestion: (task: Task, index: number, status: QuestionStatus) => Promise<void>
+  onUpdateQuestion: (task: Task, index: number, status: QuestionStatus, note: string) => Promise<void>
   onReset: (task: Task) => Promise<void>
   onEditTitle: (id: string, title: string) => Promise<void>
   onRemove: (id: string) => Promise<void>
@@ -29,6 +29,13 @@ export function PracticeTestRow({
   const [editing, setEditing] = useState(false)
   const [editText, setEditText] = useState(task.title)
   const [pickingIndex, setPickingIndex] = useState<number | null>(null)
+  const [noteText, setNoteText] = useState('')
+
+  useEffect(() => {
+    if (pickingIndex != null) {
+      setNoteText(task.questionNotes?.[pickingIndex] ?? '')
+    }
+  }, [pickingIndex, task.questionNotes])
 
   const questions = task.questions ?? []
   const total = questions.length || task.questionCount || 0
@@ -45,8 +52,9 @@ export function PracticeTestRow({
   async function chooseStatus(status: QuestionStatus) {
     if (pickingIndex == null) return
     const idx = pickingIndex
+    const note = noteText
     setPickingIndex(null)
-    await onUpdateQuestion(task, idx, status)
+    await onUpdateQuestion(task, idx, status, note)
   }
 
   return (
@@ -142,16 +150,22 @@ export function PracticeTestRow({
                     <button
                       key={i}
                       onClick={() => setPickingIndex(i)}
-                      className="rounded-2xl font-semibold h-14 flex flex-col items-center justify-center leading-tight border-2 transition active:scale-[0.97]"
+                      className="relative rounded-2xl font-semibold h-14 flex flex-col items-center justify-center leading-tight border-2 transition active:scale-[0.97]"
                       style={{
                         background: meta.bg,
                         color: meta.text,
                         borderColor: meta.border
                       }}
-                      aria-label={`Question ${i + 1}: ${meta.label}`}
+                      aria-label={`Question ${i + 1}: ${meta.label}${task.questionNotes?.[i] ? ' (has note)' : ''}`}
                     >
                       <span className="opacity-70 text-xs">Q{i + 1}</span>
                       <span className="text-xl leading-none mt-0.5">{meta.symbol}</span>
+                      {task.questionNotes?.[i] && (
+                        <span
+                          className="absolute top-1 right-1.5 w-1.5 h-1.5 rounded-full"
+                          style={{ background: meta.border }}
+                        />
+                      )}
                     </button>
                   )
                 })}
@@ -205,6 +219,18 @@ export function PracticeTestRow({
               </button>
             )
           })}
+        </div>
+        <div className="mt-4">
+          <label className="block text-xs font-semibold text-berry/70 mb-1.5">
+            Note (optional)
+          </label>
+          <textarea
+            className="input w-full resize-none text-sm"
+            rows={3}
+            placeholder="Add a note for this question…"
+            value={noteText}
+            onChange={(e) => setNoteText(e.target.value)}
+          />
         </div>
       </Dialog>
     </motion.li>

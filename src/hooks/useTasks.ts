@@ -61,7 +61,12 @@ export function useTasks(uid: string | null) {
     })
   }
 
-  async function updateQuestionStatus(task: Task, index: number, status: QuestionStatus) {
+  async function updateQuestionStatus(
+    task: Task,
+    index: number,
+    status: QuestionStatus,
+    note: string
+  ) {
     if (!uid) return
     const questions = [...(task.questions ?? [])]
     if (index < 0 || index >= questions.length) return
@@ -71,8 +76,12 @@ export function useTasks(uid: string | null) {
     const done =
       questions.length > 0 &&
       questions.every((q) => q === 'succeeded' || q === 'failed')
+    const notes = [...(task.questionNotes ?? Array(questions.length).fill(''))]
+    while (notes.length < questions.length) notes.push('')
+    notes[index] = note
     await updateDoc(doc(db, 'users', uid, 'tasks', task.id), {
       questions,
+      questionNotes: notes,
       done,
       completedAt: done ? serverTimestamp() : null
     })
@@ -82,6 +91,7 @@ export function useTasks(uid: string | null) {
     if (!uid || !task.questionCount) return
     await updateDoc(doc(db, 'users', uid, 'tasks', task.id), {
       questions: Array(task.questionCount).fill('unanswered' as QuestionStatus),
+      questionNotes: Array(task.questionCount).fill(''),
       done: false,
       completedAt: null
     })
