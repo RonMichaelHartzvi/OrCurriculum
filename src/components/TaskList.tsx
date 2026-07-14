@@ -12,7 +12,7 @@ interface Props {
   onToggle: (id: string, done: boolean) => Promise<void>
   onEdit: (id: string, title: string) => Promise<void>
   onRemove: (id: string) => Promise<void>
-  onUpdateQuestion: (task: Task, index: number, status: QuestionStatus) => Promise<void>
+  onUpdateQuestion: (task: Task, index: number, status: QuestionStatus, note: string) => Promise<void>
   onResetPracticeTest: (task: Task) => Promise<void>
 }
 

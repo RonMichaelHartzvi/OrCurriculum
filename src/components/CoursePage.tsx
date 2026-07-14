@@ -262,8 +262,8 @@ export function CoursePage({ user, courseId }: Props) {
             onToggle={(id, done) => toggleTask(id, done)}
             onEdit={(id, title) => updateTaskTitle(id, title)}
             onRemove={(id) => removeTask(id)}
-            onUpdateQuestion={(task, index, status) =>
-              updateQuestionStatus(task, index, status)
+            onUpdateQuestion={(task, index, status, note) =>
+              updateQuestionStatus(task, index, status, note)
             }
             onResetPracticeTest={(task) => resetPracticeTest(task)}
           />
