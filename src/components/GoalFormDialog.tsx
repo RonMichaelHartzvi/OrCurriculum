@@ -20,11 +20,12 @@ interface Props {
 const METRIC_SUGGESTIONS = ['questions', 'tests', 'chapters', 'pages', 'flashcards']
 
 function initialUnit(g?: Goal): GoalUnit {
-  return g?.unit === 'minutes' ? 'minutes' : 'count'
+  if (!g) return 'minutes'
+  return g.unit === 'minutes' ? 'minutes' : 'count'
 }
 
 export function GoalFormDialog({ open, onClose, courseName, onSave, onDelete, initial }: Props) {
-  const [unit, setUnit] = useState<GoalUnit>('count')
+  const [unit, setUnit] = useState<GoalUnit>('minutes')
   const [metric, setMetric] = useState('questions')
   const [target, setTarget] = useState<number>(20)
   const [hours, setHours] = useState<number>(2)
@@ -33,17 +34,11 @@ export function GoalFormDialog({ open, onClose, courseName, onSave, onDelete, in
 
   useEffect(() => {
     if (!open) return
-    const u = initialUnit(initial)
-    setUnit(u)
+    setUnit(initialUnit(initial))
     setPeriod(initial?.period ?? 'weekly')
-    if (u === 'minutes') {
-      setHours(initial ? Number(minutesToHours(initial.target).toFixed(2)) : 2)
-      setMetric('minutes')
-      setTarget(initial?.target ?? 120)
-    } else {
-      setMetric(initial?.metric ?? 'questions')
-      setTarget(initial?.target ?? 20)
-    }
+    setMetric(initial?.unit !== 'minutes' ? (initial?.metric ?? 'questions') : 'questions')
+    setTarget(initial?.unit !== 'minutes' ? (initial?.target ?? 5) : 5)
+    setHours(initial?.unit === 'minutes' ? Number(minutesToHours(initial.target).toFixed(2)) : 2)
   }, [open, initial])
 
   async function submit(e: React.FormEvent) {
@@ -81,7 +76,7 @@ export function GoalFormDialog({ open, onClose, courseName, onSave, onDelete, in
             Kind
           </label>
           <div className="mt-1 flex bg-petal/60 rounded-full p-1 text-sm font-display font-semibold">
-            {(['count', 'minutes'] as GoalUnit[]).map((u) => (
+            {(['minutes', 'count'] as GoalUnit[]).map((u) => (
               <button
                 key={u}
                 type="button"
