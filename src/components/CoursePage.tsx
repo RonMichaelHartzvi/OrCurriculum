@@ -7,7 +7,6 @@ import { useEntries } from '../hooks/useEntries'
 import { useHistory } from '../hooks/useHistory'
 import { useTasks } from '../hooks/useTasks'
 import { useSession } from '../hooks/useSession'
-import { usePlannedBlocks } from '../hooks/usePlannedBlocks'
 import { openDashboard } from '../hooks/useRoute'
 import { archivePastPeriods } from '../lib/archive'
 import { formatPeriodRange, periodKey } from '../lib/periods'
@@ -19,7 +18,6 @@ import { CourseFormDialog } from './CourseFormDialog'
 import { GoalFormDialog } from './GoalFormDialog'
 import { TaskList } from './TaskList'
 import { SessionTimer } from './SessionTimer'
-import { DayPlan } from './DayPlan'
 import type { Goal, GoalUnit, PeriodKind } from '../types'
 
 interface LogGroup {
@@ -63,12 +61,6 @@ export function CoursePage({ user, courseId }: Props) {
     cancelSession,
     endNow: endNowSession
   } = useSession(uid)
-  const {
-    blocks: plannedBlocks,
-    addBlock,
-    updateBlock,
-    removeBlock
-  } = usePlannedBlocks(uid)
 
   const course = courses.find((c) => c.id === courseId)
   const courseGoals = useMemo(
@@ -255,29 +247,6 @@ export function CoursePage({ user, courseId }: Props) {
               </div>
             </>
           )}
-        </section>
-
-        {/* Day plan section */}
-        <section className="card p-6">
-          <SectionHeader
-            title="Day plan"
-            subtitle="Time blocks for today. Push them to Google Calendar if you like."
-          />
-          <DayPlan
-            courses={courses}
-            goals={goals}
-            blocks={plannedBlocks}
-            activeSession={activeSession}
-            onAddBlock={addBlock}
-            onUpdateBlock={updateBlock}
-            onRemoveBlock={removeBlock}
-            onStartSession={startSession}
-            onCompleteSession={completeSession}
-            onCancelSession={cancelSession}
-            onEndNowSession={endNowSession}
-            courseFilter={courseId}
-            compact
-          />
         </section>
 
         {/* Tasks section */}

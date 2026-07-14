@@ -9,6 +9,7 @@ import {
   fireAlarm,
   primeAudio,
   requestNotificationPermission,
+  stopAlarm,
   useWakeLock
 } from '../lib/alarm'
 
@@ -30,6 +31,11 @@ export function BreakFab({ uid }: Props) {
   const [minutes, setMinutes] = useState<number>(15)
   const [customMin, setCustomMin] = useState<string>('')
   const [now, setNow] = useState<number>(Date.now())
+  // Local echo of alarmed state so the "break time over" transition is
+  // reflected instantly, even if the Firestore markAlarmed write is slow
+  // or fails — otherwise the dialog could stay locked when it shouldn't.
+  const [alarmedLocal, setAlarmedLocal] = useState<string | null>(null)
+  const [endError, setEndError] = useState<string | null>(null)
 
   // Hold the screen awake only while the break is still counting down.
   // Once the chime has fired (`alarmedAt` set) we release, so a stale
@@ -44,7 +50,8 @@ export function BreakFab({ uid }: Props) {
 
   // `alarmedAt` is stored on the break doc so this survives BreakFab
   // unmount/remount (e.g. navigating Dashboard → CoursePage → Dashboard).
-  const alarmed = Boolean(active?.alarmedAt)
+  const alarmed =
+    Boolean(active?.alarmedAt) || (active != null && alarmedLocal === active.id)
   // Synchronous guard: markAlarmed's Firestore write is async, so `alarmed`
   // stays false until the snapshot returns (~200 ms). Without this ref the
   // next `now` tick re-runs the effect and fires the chime a second time.
@@ -59,6 +66,7 @@ export function BreakFab({ uid }: Props) {
     const remaining = active.plannedMinutes - breakElapsedMinutes(active, now)
     if (remaining <= 0) {
       firedForBreakIdRef.current = active.id
+      setAlarmedLocal(active.id)
       fireAlarm({
         title: 'Break over 💗',
         body: 'Time to come back to study.'
@@ -66,6 +74,18 @@ export function BreakFab({ uid }: Props) {
       markAlarmed(active).catch(() => {})
     }
   }, [active, now, alarmed, markAlarmed])
+
+  // Auto-open the popup whenever a break is on and hasn't chimed yet, so
+  // the user can't lose sight of it by navigating around. Runs on active
+  // changes only — user closes are respected once the timer has expired.
+  useEffect(() => {
+    if (active && !alarmed) setOpen(true)
+  }, [active?.id, alarmed])
+
+  // Clear stale local flag when the break ends.
+  useEffect(() => {
+    if (!active) setAlarmedLocal(null)
+  }, [active])
 
   async function handleStart() {
     await primeAudio()
@@ -75,8 +95,19 @@ export function BreakFab({ uid }: Props) {
 
   async function handleEnd() {
     if (!active) return
-    await endBreak(active, alarmed ? 'completed' : 'canceled')
-    setOpen(false)
+    // Kill any playing chime up front — mirrors SessionTimer.handleConfirm so
+    // the sound stops immediately when the user taps End, even if the
+    // Firestore write below is slow or fails.
+    stopAlarm()
+    try {
+      setEndError(null)
+      await endBreak(active, alarmed ? 'completed' : 'canceled')
+      setOpen(false)
+    } catch (err) {
+      setEndError(
+        err instanceof Error ? err.message : 'Could not end break. Try again.'
+      )
+    }
   }
 
   return (
@@ -94,7 +125,15 @@ export function BreakFab({ uid }: Props) {
         ☕ {active ? 'On break' : 'Break'}
       </motion.button>
 
-      <Dialog open={open} onClose={() => setOpen(false)} title={active ? 'On a break' : 'Take a break'}>
+      <Dialog
+        open={open}
+        onClose={() => setOpen(false)}
+        title={active ? 'On a break' : 'Take a break'}
+        // Lock the popup while the break is running so the user can't
+        // accidentally lose sight of it — only "End break" closes it.
+        // Once the chime has fired the popup is dismissible again.
+        dismissible={!(active && !alarmed)}
+      >
         {active ? (
           <div className="space-y-4 flex flex-col items-center">
             <RingProgress
@@ -108,11 +147,18 @@ export function BreakFab({ uid }: Props) {
               )}
               sublabel="left"
             />
-            <button className="btn-primary" onClick={handleEnd}>
+            <button className="btn-primary w-full text-base py-3" onClick={handleEnd}>
               End break
             </button>
+            {endError && (
+              <p className="text-xs text-deepRose text-center">
+                {endError} Tap "End break" to try again.
+              </p>
+            )}
             <p className="text-xs text-berry/60 text-center">
-              You'll hear a chime when your break's up.
+              {alarmed
+                ? "Break's up — tap End break, or dismiss the popup."
+                : "You'll hear a chime when your break's up."}
             </p>
           </div>
         ) : (
