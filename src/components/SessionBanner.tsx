@@ -3,7 +3,6 @@ import { AnimatePresence, motion } from 'framer-motion'
 import type { User } from 'firebase/auth'
 import { useSession } from '../hooks/useSession'
 import { useCourses } from '../hooks/useCourses'
-import { useGoals } from '../hooks/useGoals'
 import { sessionElapsedMinutes } from '../lib/time'
 import { fireAlarm } from '../lib/alarm'
 import { SessionTimer } from './SessionTimer'
@@ -19,8 +18,7 @@ export function SessionBanner({ user }: { user: User }) {
     markAlarmed
   } = useSession(uid)
   const { courses } = useCourses(uid)
-  const { goals } = useGoals(uid)
-  const [now, setNow] = useState<number>(Date.now())
+const [now, setNow] = useState<number>(Date.now())
   const [open, setOpen] = useState(false)
   const alarmedForSessionId = useRef<string | null>(null)
 
@@ -108,7 +106,6 @@ export function SessionBanner({ user }: { user: User }) {
           open={open}
           onClose={() => setOpen(false)}
           course={course}
-          goals={goals}
           active={active}
           onStart={startSession}
           onComplete={completeSession}

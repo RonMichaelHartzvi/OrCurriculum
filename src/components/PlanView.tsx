@@ -1,6 +1,5 @@
 import type { User } from 'firebase/auth'
 import { useCourses } from '../hooks/useCourses'
-import { useGoals } from '../hooks/useGoals'
 import { useSession } from '../hooks/useSession'
 import { usePlannedBlocks } from '../hooks/usePlannedBlocks'
 import { openDashboard } from '../hooks/useRoute'
@@ -9,8 +8,7 @@ import { DayPlan } from './DayPlan'
 export function PlanView({ user }: { user: User }) {
   const uid = user.uid
   const { courses } = useCourses(uid)
-  const { goals } = useGoals(uid)
-  const { blocks, addBlock, updateBlock, removeBlock } = usePlannedBlocks(uid)
+const { blocks, addBlock, updateBlock, removeBlock } = usePlannedBlocks(uid)
   const { active, startSession, completeSession, cancelSession, endNow } = useSession(uid)
 
   return (
@@ -39,7 +37,6 @@ export function PlanView({ user }: { user: User }) {
           ) : (
             <DayPlan
               courses={courses}
-              goals={goals}
               blocks={blocks}
               activeSession={active}
               onAddBlock={addBlock}

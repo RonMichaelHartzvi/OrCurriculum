@@ -8,7 +8,6 @@ import { useCalendarSync } from '../hooks/useCalendarSync'
 
 interface Props {
   courses: Course[]
-  goals: Goal[]
   blocks: PlannedBlock[]
   activeSession: Session | null
   onAddBlock: (input: {
@@ -95,7 +94,6 @@ function overlaps(aStart: number, aEnd: number, bStart: number, bEnd: number): b
 
 export function DayPlan({
   courses,
-  goals,
   blocks,
   activeSession,
   onAddBlock,
@@ -360,7 +358,6 @@ export function DayPlan({
           open={Boolean(runningBlock)}
           onClose={() => setRunningBlock(null)}
           course={sessionCourse}
-          goals={goals}
           active={activeSession}
           initialMinutes={Math.max(1, Math.round(blockMinutes(runningBlock)))}
           onStart={onStartSession}
@@ -820,7 +817,7 @@ function BlockFormDialog({
         : toLocalInput(new Date(defaultStart(defaultDate).getTime() + 60 * 60 * 1000))
     )
     setNotes(initial?.notes ?? '')
-    setSyncCal(Boolean(initial?.calendarEventId))
+    setSyncCal(initial ? Boolean(initial.calendarEventId) : true)
     setAuthWarn(false)
   }, [open, initial, lockCourseId, courses, defaultDate])
 
