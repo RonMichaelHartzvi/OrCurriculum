@@ -314,16 +314,18 @@ export function CourseCard({
         onClose={() => setActivePracticeTestId(null)}
       />
 
-      <SessionTimer
-        open={showSession}
-        onClose={() => setShowSession(false)}
-        course={course}
-        active={activeSession}
-        onStart={onStartSession}
-        onComplete={onCompleteSession}
-        onCancel={onCancelSession}
-        onEndNow={onEndNowSession}
-      />
+      {showSession && (
+        <SessionTimer
+          open={showSession}
+          onClose={() => setShowSession(false)}
+          course={course}
+          active={activeSession}
+          onStart={onStartSession}
+          onComplete={onCompleteSession}
+          onCancel={onCancelSession}
+          onEndNow={onEndNowSession}
+        />
+      )}
     </motion.div>
   )
 }
