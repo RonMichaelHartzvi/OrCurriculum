@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-import type { Course, Entry, Goal, GoalUnit, PeriodKind, QuestionStatus, Task } from '../types'
+import type { Course, Entry, Goal, GoalUnit, PeriodKind, QuestionStatus, Session, Task } from '../types'
 import { RingProgress } from './RingProgress'
 import { QuickAddSheet } from './QuickAddSheet'
 import { GoalFormDialog } from './GoalFormDialog'
+import { SessionTimer } from './SessionTimer'
 import { PracticeTestInteractDialog } from './PracticeTestInteractDialog'
 import { formatPeriodRange } from '../lib/periods'
 import { formatDuration } from '../lib/time'
@@ -20,6 +21,7 @@ interface Props {
   goals: Goal[]
   entries: Entry[]
   taskGoals?: Task[]
+  activeSession: Session | null
   onOpen: () => void
   onAddGoal: (data: {
     metric: string
@@ -28,6 +30,10 @@ interface Props {
     unit: GoalUnit
   }) => Promise<void>
   onLog: (goal: Goal, amount: number) => Promise<void>
+  onStartSession: (input: { courseId: string; goalId: string | null; plannedMinutes: number }) => Promise<void>
+  onCompleteSession: (session: Session, goal: Goal | null, loggedMinutes: number) => Promise<void>
+  onCancelSession: (session: Session) => Promise<void>
+  onEndNowSession: (session: Session, goal: Goal | null) => Promise<void>
   onToggle: (id: string, done: boolean) => Promise<void>
   onToggleGoal: (id: string, isGoal: boolean) => Promise<void>
   onUpdateQuestion: (task: Task, index: number, status: QuestionStatus, note: string) => Promise<void>
@@ -40,9 +46,14 @@ export function CourseCard({
   goals,
   entries,
   taskGoals = [],
+  activeSession,
   onOpen,
   onAddGoal,
   onLog,
+  onStartSession,
+  onCompleteSession,
+  onCancelSession,
+  onEndNowSession,
   onToggle,
   onToggleGoal,
   onUpdateQuestion,
@@ -51,7 +62,11 @@ export function CourseCard({
 }: Props) {
   const [showGoalForm, setShowGoalForm] = useState(false)
   const [logGroup, setLogGroup] = useState<LogGroup | null>(null)
+  const [showSession, setShowSession] = useState(false)
   const [activePracticeTestId, setActivePracticeTestId] = useState<string | null>(null)
+
+  const sessionIsThisCourse = activeSession?.courseId === course.id
+  const sessionOtherCourse = Boolean(activeSession && !sessionIsThisCourse)
   const activePracticeTest = activePracticeTestId
     ? (taskGoals.find((t) => t.id === activePracticeTestId) ?? null)
     : null
@@ -249,6 +264,13 @@ export function CourseCard({
                   </button>
                 )
               })}
+              <button
+                className="btn-soft text-sm"
+                disabled={sessionOtherCourse}
+                onClick={stop(() => setShowSession(true))}
+              >
+                ▶ Start session
+              </button>
             </div>
           )}
         </div>
@@ -290,6 +312,17 @@ export function CourseCard({
         onUpdateQuestion={onUpdateQuestion}
         onReset={onResetPracticeTest}
         onClose={() => setActivePracticeTestId(null)}
+      />
+
+      <SessionTimer
+        open={showSession || sessionIsThisCourse}
+        onClose={() => setShowSession(false)}
+        course={course}
+        active={activeSession}
+        onStart={onStartSession}
+        onComplete={onCompleteSession}
+        onCancel={onCancelSession}
+        onEndNow={onEndNowSession}
       />
     </motion.div>
   )

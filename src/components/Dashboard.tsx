@@ -6,6 +6,7 @@ import { useGoals } from '../hooks/useGoals'
 import { useEntries } from '../hooks/useEntries'
 import { useTasks } from '../hooks/useTasks'
 import { useSessions } from '../hooks/useSessions'
+import { useSession } from '../hooks/useSession'
 import { openCourse, openPlan, openTime } from '../hooks/useRoute'
 import { archivePastPeriods } from '../lib/archive'
 import { CourseCard } from './CourseCard'
@@ -24,6 +25,7 @@ export function Dashboard({ user }: { user: User }) {
   const { entries, addEntry } = useEntries(uid)
   const { tasks, toggleTask, toggleTaskGoal, updateQuestionStatus, resetPracticeTest } = useTasks(uid)
   const { all: sessions, discardSession, discardEntry } = useSessions(uid)
+  const { active: activeSession, startSession, completeSession, cancelSession, endNow } = useSession(uid)
 
   const [showNewCourse, setShowNewCourse] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
@@ -60,6 +62,21 @@ export function Dashboard({ user }: { user: User }) {
     }
     return m
   }, [tasks])
+
+  // Auto-creates a time goal if the course has none, then starts the session —
+  // mirrors the same pattern in CoursePage.
+  async function handleStartSession(courseId: string, input: {
+    courseId: string
+    goalId: string | null
+    plannedMinutes: number
+  }) {
+    const courseGoals = goalsByCourse.get(courseId) ?? []
+    const hasTimeGoal = courseGoals.some((g) => (g.unit ?? 'count') === 'minutes')
+    if (!hasTimeGoal) {
+      await addGoal({ courseId, metric: 'minutes', target: 1, period: 'daily', unit: 'minutes' })
+    }
+    await startSession(input)
+  }
 
   return (
     <div className="min-h-full">
@@ -111,6 +128,7 @@ export function Dashboard({ user }: { user: User }) {
                     goals={goalsByCourse.get(c.id) ?? []}
                     entries={entries}
                     taskGoals={taskGoalsByCourse.get(c.id) ?? []}
+                    activeSession={activeSession}
                     onOpen={() => openCourse(c.id)}
                     onAddGoal={(data) => addGoal({ courseId: c.id, ...data })}
                     onLog={(goal, amount) =>
@@ -122,6 +140,10 @@ export function Dashboard({ user }: { user: User }) {
                         periodKey: periodKey(goal.period as PeriodKind)
                       })
                     }
+                    onStartSession={(input) => handleStartSession(c.id, input)}
+                    onCompleteSession={completeSession}
+                    onCancelSession={cancelSession}
+                    onEndNowSession={endNow}
                     onToggle={(id, done) => toggleTask(id, done)}
                     onToggleGoal={(id, isGoal) => toggleTaskGoal(id, isGoal)}
                     onUpdateQuestion={(task, index, status, note) =>
