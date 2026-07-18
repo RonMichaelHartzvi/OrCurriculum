@@ -315,7 +315,7 @@ export function CourseCard({
       />
 
       <SessionTimer
-        open={showSession || sessionIsThisCourse}
+        open={showSession}
         onClose={() => setShowSession(false)}
         course={course}
         active={activeSession}
