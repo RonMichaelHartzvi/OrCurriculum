@@ -147,6 +147,19 @@ export interface CourseLink {
   createdAt: Timestamp | null
 }
 
+export interface QuestionRef {
+  taskId: string
+  questionIndex: number
+}
+
+export interface QuestionCategory {
+  id: string
+  courseId: string
+  name: string
+  createdAt: Timestamp | null
+  questions: QuestionRef[]
+}
+
 export interface HistoryRecord {
   id: string
   courseId: string

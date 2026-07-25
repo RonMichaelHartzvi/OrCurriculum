@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import type { QuestionStatus, Task } from '../types'
+import type { QuestionCategory, QuestionRef, QuestionStatus, Task } from '../types'
 import { PracticeTestDialog } from './PracticeTestDialog'
 import { PracticeTestRow } from './PracticeTestRow'
 
@@ -17,6 +17,8 @@ interface Props {
   onUnarchive: (id: string) => Promise<void>
   onUpdateQuestion: (task: Task, index: number, status: QuestionStatus, note: string) => Promise<void>
   onResetPracticeTest: (task: Task) => Promise<void>
+  categories?: QuestionCategory[]
+  onToggleQuestionCategory?: (categoryId: string, ref: QuestionRef, add: boolean) => Promise<void>
 }
 
 const DEFAULT_QUESTION_COUNT = 20
@@ -33,7 +35,9 @@ export function TaskList({
   onArchive,
   onUnarchive,
   onUpdateQuestion,
-  onResetPracticeTest
+  onResetPracticeTest,
+  categories,
+  onToggleQuestionCategory
 }: Props) {
   const [draft, setDraft] = useState('')
   const [busy, setBusy] = useState(false)
@@ -89,6 +93,8 @@ export function TaskList({
           onRemove={onRemove}
           onToggleGoal={(isGoal) => onToggleGoal(t.id, isGoal)}
           onArchive={() => onArchive(t.id)}
+          categories={categories}
+          onToggleCategory={onToggleQuestionCategory}
         />
       )
     }
