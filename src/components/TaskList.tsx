@@ -13,6 +13,8 @@ interface Props {
   onToggleGoal: (id: string, isGoal: boolean) => Promise<void>
   onEdit: (id: string, title: string) => Promise<void>
   onRemove: (id: string) => Promise<void>
+  onArchive: (id: string) => Promise<void>
+  onUnarchive: (id: string) => Promise<void>
   onUpdateQuestion: (task: Task, index: number, status: QuestionStatus, note: string) => Promise<void>
   onResetPracticeTest: (task: Task) => Promise<void>
 }
@@ -28,6 +30,8 @@ export function TaskList({
   onToggleGoal,
   onEdit,
   onRemove,
+  onArchive,
+  onUnarchive,
   onUpdateQuestion,
   onResetPracticeTest
 }: Props) {
@@ -36,9 +40,12 @@ export function TaskList({
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingText, setEditingText] = useState('')
   const [showTestDialog, setShowTestDialog] = useState(false)
+  const [showArchived, setShowArchived] = useState(false)
 
-  const openTasks = tasks.filter((t) => !t.done)
-  const doneTasks = tasks.filter((t) => t.done)
+  const activeTasks = tasks.filter((t) => !t.archived)
+  const archivedTasks = tasks.filter((t) => t.archived)
+  const openTasks = activeTasks.filter((t) => !t.done)
+  const doneTasks = activeTasks.filter((t) => t.done)
 
   // Smart default: most-recent practice test's question count on this course.
   // useTasks orders by createdAt desc, so `find` returns the newest.
@@ -81,6 +88,7 @@ export function TaskList({
           onEditTitle={onEdit}
           onRemove={onRemove}
           onToggleGoal={(isGoal) => onToggleGoal(t.id, isGoal)}
+          onArchive={() => onArchive(t.id)}
         />
       )
     }
@@ -104,6 +112,7 @@ export function TaskList({
         onToggle={() => onToggle(t.id, !t.done)}
         onRemove={() => onRemove(t.id)}
         onToggleGoal={() => onToggleGoal(t.id, !t.isGoal)}
+        onArchive={() => onArchive(t.id)}
       />
     )
   }
@@ -131,9 +140,11 @@ export function TaskList({
         Add a practice test
       </button>
 
-      {tasks.length === 0 ? (
+      {activeTasks.length === 0 ? (
         <div className="text-center text-berry/60 text-sm py-8">
-          🌱 No tasks yet — add one above.
+          {archivedTasks.length > 0
+            ? '🗂️ All tasks are archived.'
+            : '🌱 No tasks yet — add one above.'}
         </div>
       ) : (
         <>
@@ -152,6 +163,45 @@ export function TaskList({
             </div>
           )}
         </>
+      )}
+
+      {archivedTasks.length > 0 && (
+        <div>
+          <button
+            type="button"
+            className="flex items-center gap-1.5 text-xs font-semibold text-berry/50 uppercase tracking-wide mt-4 hover:text-berry/70 transition"
+            onClick={() => setShowArchived((v) => !v)}
+          >
+            <span>Archived · {archivedTasks.length}</span>
+            <motion.span
+              animate={{ rotate: showArchived ? 180 : 0 }}
+              transition={{ type: 'spring', damping: 18, stiffness: 260 }}
+              className="inline-block leading-none text-base"
+            >
+              ⌄
+            </motion.span>
+          </button>
+          <AnimatePresence initial={false}>
+            {showArchived && (
+              <motion.ul
+                key="archived-list"
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="space-y-2 mt-2 overflow-hidden"
+              >
+                {archivedTasks.map((t) => (
+                  <ArchivedRow
+                    key={t.id}
+                    task={t}
+                    onUnarchive={() => onUnarchive(t.id)}
+                    onRemove={() => onRemove(t.id)}
+                  />
+                ))}
+              </motion.ul>
+            )}
+          </AnimatePresence>
+        </div>
       )}
 
       <PracticeTestDialog
@@ -176,6 +226,7 @@ interface RowProps {
   onToggle: () => void
   onRemove: () => void
   onToggleGoal: () => void
+  onArchive: () => void
 }
 
 function TaskRow({
@@ -189,7 +240,8 @@ function TaskRow({
   onCancelEdit,
   onToggle,
   onRemove,
-  onToggleGoal
+  onToggleGoal,
+  onArchive
 }: RowProps) {
   return (
     <motion.li
@@ -273,6 +325,14 @@ function TaskRow({
       </button>
 
       <button
+        onClick={onArchive}
+        className="opacity-0 group-hover:opacity-100 focus:opacity-100 text-berry/50 hover:text-berry transition flex items-center px-1"
+        aria-label="Archive task"
+      >
+        <ArchiveIcon />
+      </button>
+
+      <button
         onClick={onRemove}
         className="opacity-0 group-hover:opacity-100 focus:opacity-100 text-berry/50 hover:text-berry transition text-sm px-1"
         aria-label="Delete task"
@@ -280,5 +340,58 @@ function TaskRow({
         ×
       </button>
     </motion.li>
+  )
+}
+
+function ArchivedRow({
+  task,
+  onUnarchive,
+  onRemove
+}: {
+  task: Task
+  onUnarchive: () => void
+  onRemove: () => void
+}) {
+  const isPT = task.type === 'practiceTest'
+  return (
+    <motion.li
+      layout
+      initial={{ opacity: 0, y: -4 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -4 }}
+      transition={{ type: 'spring', damping: 24, stiffness: 260 }}
+      className="flex items-center gap-3 rounded-2xl px-3 py-2.5 border bg-white/40 border-petal/40"
+    >
+      <span className="text-base shrink-0 opacity-50">{isPT ? '📝' : '✓'}</span>
+      <span className="flex-1 font-body text-berry/50 line-through text-sm truncate">
+        {task.title}
+      </span>
+      {isPT && task.questionCount != null && (
+        <span className="text-xs text-berry/40 shrink-0">{task.questionCount}Q</span>
+      )}
+      <button
+        onClick={onUnarchive}
+        className="shrink-0 text-xs font-semibold text-berry/60 hover:text-berry transition px-2 py-1 rounded-xl hover:bg-petal/50"
+      >
+        Restore
+      </button>
+      <button
+        onClick={onRemove}
+        className="shrink-0 text-berry/40 hover:text-berry transition text-sm px-1"
+        aria-label="Delete task"
+      >
+        ×
+      </button>
+    </motion.li>
+  )
+}
+
+function ArchiveIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 20 20" fill="none" aria-hidden>
+      <rect x="2" y="2" width="16" height="5" rx="1.5" stroke="currentColor" strokeWidth="1.8"/>
+      <path d="M4 7v9a1 1 0 001 1h10a1 1 0 001-1V7" stroke="currentColor" strokeWidth="1.8"/>
+      <path d="M10 15v-4M8 13l2 2 2-2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
   )
 }

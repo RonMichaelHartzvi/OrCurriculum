@@ -115,6 +115,16 @@ export function useTasks(uid: string | null) {
     await updateDoc(doc(db, 'users', uid, 'tasks', id), { isGoal })
   }
 
+  async function archiveTask(id: string) {
+    if (!uid) return
+    await updateDoc(doc(db, 'users', uid, 'tasks', id), { archived: true })
+  }
+
+  async function unarchiveTask(id: string) {
+    if (!uid) return
+    await updateDoc(doc(db, 'users', uid, 'tasks', id), { archived: false })
+  }
+
   async function removeTask(id: string) {
     if (!uid) return
     await deleteDoc(doc(db, 'users', uid, 'tasks', id))
@@ -130,6 +140,8 @@ export function useTasks(uid: string | null) {
     updateTaskTitle,
     updateQuestionStatus,
     resetPracticeTest,
+    archiveTask,
+    unarchiveTask,
     removeTask
   }
 }
