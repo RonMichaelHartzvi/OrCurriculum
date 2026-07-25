@@ -50,6 +50,7 @@ export interface Task {
   questions?: QuestionStatus[]
   questionNotes?: string[]
   isGoal?: boolean
+  archived?: boolean
 }
 
 export interface QuestionStatusMeta {

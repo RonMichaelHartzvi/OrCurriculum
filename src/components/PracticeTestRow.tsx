@@ -16,6 +16,7 @@ interface Props {
   onEditTitle: (id: string, title: string) => Promise<void>
   onRemove: (id: string) => Promise<void>
   onToggleGoal: (isGoal: boolean) => void
+  onArchive?: () => void
 }
 
 export function PracticeTestRow({
@@ -25,7 +26,8 @@ export function PracticeTestRow({
   onReset,
   onEditTitle,
   onRemove,
-  onToggleGoal
+  onToggleGoal,
+  onArchive
 }: Props) {
   const [expanded, setExpanded] = useState(false)
   const [editing, setEditing] = useState(false)
@@ -138,6 +140,15 @@ export function PracticeTestRow({
         >
           {task.isGoal ? '★' : '☆'}
         </button>
+        {onArchive && (
+          <button
+            onClick={onArchive}
+            className="shrink-0 w-8 h-8 rounded-full text-berry/40 hover:text-berry hover:bg-petal/40 transition flex items-center justify-center opacity-0 group-hover:opacity-100 focus:opacity-100"
+            aria-label="Archive practice test"
+          >
+            <ArchiveIcon />
+          </button>
+        )}
         <button
           onClick={() => onRemove(task.id)}
           className="shrink-0 w-8 h-8 rounded-full text-berry/40 hover:text-berry hover:bg-petal/40 transition text-xl flex items-center justify-center"
@@ -289,6 +300,16 @@ function StatusSummary({ counts }: { counts: Record<QuestionStatus, number> }) {
         )
       })}
     </span>
+  )
+}
+
+function ArchiveIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 20 20" fill="none" aria-hidden>
+      <rect x="2" y="2" width="16" height="5" rx="1.5" stroke="currentColor" strokeWidth="1.8"/>
+      <path d="M4 7v9a1 1 0 001 1h10a1 1 0 001-1V7" stroke="currentColor" strokeWidth="1.8"/>
+      <path d="M10 15v-4M8 13l2 2 2-2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
   )
 }
 

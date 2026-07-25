@@ -48,6 +48,8 @@ export function CoursePage({ user, courseId }: Props) {
     updateTaskTitle,
     updateQuestionStatus,
     resetPracticeTest,
+    archiveTask,
+    unarchiveTask,
     removeTask
   } = useTasks(uid)
   const { links, addLink, updateLink, removeLink } = useLinks(uid)
@@ -80,7 +82,7 @@ export function CoursePage({ user, courseId }: Props) {
     [links, courseId]
   )
   const taskGoals = useMemo(
-    () => courseTasks.filter((t) => t.isGoal),
+    () => courseTasks.filter((t) => t.isGoal && !t.archived),
     [courseTasks]
   )
   const courseHistory = useMemo(
@@ -181,8 +183,8 @@ export function CoursePage({ user, courseId }: Props) {
               <h1 className="text-3xl font-display font-bold text-deepRose">{course.name}</h1>
               <p className="text-sm text-berry/70">
                 {courseGoals.length} {courseGoals.length === 1 ? 'goal' : 'goals'} ·{' '}
-                {courseTasks.filter((t) => !t.done).length} open{' '}
-                {courseTasks.filter((t) => !t.done).length === 1 ? 'task' : 'tasks'}
+                {courseTasks.filter((t) => !t.done && !t.archived).length} open{' '}
+                {courseTasks.filter((t) => !t.done && !t.archived).length === 1 ? 'task' : 'tasks'}
               </p>
             </div>
           </motion.div>
@@ -343,6 +345,8 @@ export function CoursePage({ user, courseId }: Props) {
             onToggleGoal={(id, isGoal) => toggleTaskGoal(id, isGoal)}
             onEdit={(id, title) => updateTaskTitle(id, title)}
             onRemove={(id) => removeTask(id)}
+            onArchive={(id) => archiveTask(id)}
+            onUnarchive={(id) => unarchiveTask(id)}
             onUpdateQuestion={(task, index, status, note) =>
               updateQuestionStatus(task, index, status, note)
             }
