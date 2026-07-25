@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import type { User } from 'firebase/auth'
+import type { Timestamp } from 'firebase/firestore'
 import { motion } from 'framer-motion'
 import { useCourses } from '../hooks/useCourses'
 import { useEntries } from '../hooks/useEntries'
@@ -45,6 +46,57 @@ function historyMidpoint(h: HistoryRecord): Date | null {
   const end = h.periodEnd?.toDate?.()
   if (!start || !end) return null
   return new Date((start.getTime() + end.getTime()) / 2)
+}
+
+function archivedCourseDayCount(
+  courseId: string,
+  archivedAt: Timestamp,
+  entries: Entry[],
+  history: HistoryRecord[],
+  range: RangeKey,
+  cutoff: Date | null
+): number {
+  const archiveDate = startOfDay(archivedAt.toDate())
+
+  if (range === 'all') {
+    const dates = new Set<string>()
+    for (const e of entries) {
+      if (e.courseId !== courseId || entryMinutes(e) <= 0) continue
+      const d = entryDate(e)
+      if (!d) continue
+      dates.add(startOfDay(d).toISOString().slice(0, 10))
+    }
+    for (const h of history) {
+      if (h.courseId !== courseId || historyMinutes(h) <= 0) continue
+      const d = historyMidpoint(h)
+      if (!d) continue
+      dates.add(startOfDay(d).toISOString().slice(0, 10))
+    }
+    return Math.max(dates.size, 1)
+  }
+
+  const rangeDays = range === '7d' ? 7 : range === '30d' ? 30 : 90
+  let earliest: Date | null = null
+  for (const e of entries) {
+    if (e.courseId !== courseId || entryMinutes(e) <= 0) continue
+    const d = entryDate(e)
+    if (!d || (cutoff && d < cutoff)) continue
+    if (!earliest || d < earliest) earliest = d
+  }
+  for (const h of history) {
+    if (h.courseId !== courseId || historyMinutes(h) <= 0) continue
+    const d = historyMidpoint(h)
+    if (!d || (cutoff && d < cutoff)) continue
+    if (!earliest || d < earliest) earliest = d
+  }
+  if (!earliest) return rangeDays
+
+  const today = startOfDay(new Date())
+  // Cap end at archive date — the course was not active after that.
+  const endDay = archiveDate < today ? archiveDate : today
+  const days =
+    Math.round((endDay.getTime() - startOfDay(earliest).getTime()) / (1000 * 60 * 60 * 24)) + 1
+  return Math.min(rangeDays, Math.max(1, days))
 }
 
 export function TimeDashboard({ user }: { user: User }) {
@@ -187,15 +239,20 @@ export function TimeDashboard({ user }: { user: User }) {
           {sortedCourses.length === 0 ? (
             <div className="text-berry/70 text-sm">No courses yet.</div>
           ) : (
-            sortedCourses.map(({ course, minutes }) => (
-              <CourseBar
-                key={course.id}
-                course={course}
-                minutes={minutes}
-                dayCount={dayCount}
-                max={maxCourse}
-              />
-            ))
+            sortedCourses.map(({ course, minutes }) => {
+              const barDayCount = course.archivedAt
+                ? archivedCourseDayCount(course.id, course.archivedAt, entries, history, range, cutoff)
+                : dayCount
+              return (
+                <CourseBar
+                  key={course.id}
+                  course={course}
+                  minutes={minutes}
+                  dayCount={barDayCount}
+                  max={maxCourse}
+                />
+              )
+            })
           )}
         </section>
       </main>
@@ -221,6 +278,9 @@ function CourseBar({
       <div className="flex items-baseline gap-2">
         <span className="text-lg">{course.emoji}</span>
         <span className="font-display font-semibold text-berry">{course.name}</span>
+        {course.archivedAt && (
+          <span className="chip text-[10px] py-0 self-center">Archived</span>
+        )}
         <div className="flex-1" />
         <span className="text-sm text-berry font-semibold">{formatDuration(Math.round(minutes))}</span>
         <span className="text-[10px] text-berry/60">
