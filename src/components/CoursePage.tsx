@@ -8,6 +8,7 @@ import { useHistory } from '../hooks/useHistory'
 import { useTasks } from '../hooks/useTasks'
 import { useLinks } from '../hooks/useLinks'
 import { useSession } from '../hooks/useSession'
+import { useQuestionCategories } from '../hooks/useQuestionCategories'
 import { openDashboard } from '../hooks/useRoute'
 import { archivePastPeriods } from '../lib/archive'
 import { formatPeriodRange, periodKey } from '../lib/periods'
@@ -20,7 +21,9 @@ import { GoalFormDialog } from './GoalFormDialog'
 import { TaskList } from './TaskList'
 import { LinkList } from './LinkList'
 import { SessionTimer } from './SessionTimer'
-import type { Goal, GoalUnit, PeriodKind } from '../types'
+import { QuestionCategorySection } from './QuestionCategorySection'
+import { QuestionCategoryView } from './QuestionCategoryView'
+import type { Goal, GoalUnit, PeriodKind, QuestionCategory } from '../types'
 
 interface LogGroup {
   unit: GoalUnit
@@ -53,12 +56,14 @@ export function CoursePage({ user, courseId }: Props) {
     removeTask
   } = useTasks(uid)
   const { links, addLink, updateLink, removeLink } = useLinks(uid)
+  const { categories, addCategory, removeCategory, toggleQuestionInCategory } = useQuestionCategories(uid)
 
   const [showEditCourse, setShowEditCourse] = useState(false)
   const [showNewGoal, setShowNewGoal] = useState(false)
   const [editingGoal, setEditingGoal] = useState<Goal | null>(null)
   const [logGroup, setLogGroup] = useState<LogGroup | null>(null)
   const [sessionForGoal, setSessionForGoal] = useState<Goal | null | 'freeform'>(null)
+  const [viewingCategory, setViewingCategory] = useState<QuestionCategory | null>(null)
 
   const {
     active: activeSession,
@@ -80,6 +85,10 @@ export function CoursePage({ user, courseId }: Props) {
   const courseLinks = useMemo(
     () => links.filter((l) => l.courseId === courseId),
     [links, courseId]
+  )
+  const courseCategories = useMemo(
+    () => categories.filter((c) => c.courseId === courseId),
+    [categories, courseId]
   )
   const taskGoals = useMemo(
     () => courseTasks.filter((t) => t.isGoal && !t.archived),
@@ -351,6 +360,22 @@ export function CoursePage({ user, courseId }: Props) {
               updateQuestionStatus(task, index, status, note)
             }
             onResetPracticeTest={(task) => resetPracticeTest(task)}
+            categories={courseCategories}
+            onToggleQuestionCategory={toggleQuestionInCategory}
+          />
+        </section>
+
+        {/* Question Categories section */}
+        <section className="card p-6">
+          <SectionHeader
+            title="Question Categories"
+            subtitle="Group questions from practice tests for focused study."
+          />
+          <QuestionCategorySection
+            categories={courseCategories}
+            onAdd={(name) => addCategory(courseId, name)}
+            onDelete={(id) => removeCategory(id)}
+            onView={(cat) => setViewingCategory(cat)}
           />
         </section>
 
@@ -413,6 +438,21 @@ export function CoursePage({ user, courseId }: Props) {
           )}
         </section>
       </main>
+
+      {viewingCategory && (
+        <QuestionCategoryView
+          open={!!viewingCategory}
+          category={viewingCategory}
+          tasks={courseTasks}
+          onClose={() => setViewingCategory(null)}
+          onUpdateQuestion={(task, index, status, note) =>
+            updateQuestionStatus(task, index, status, note)
+          }
+          onToggleQuestion={(categoryId, ref, add) =>
+            toggleQuestionInCategory(categoryId, ref, add)
+          }
+        />
+      )}
 
       <CourseFormDialog
         open={showEditCourse}

@@ -4,6 +4,8 @@ import { Dialog } from './ui/Dialog'
 import {
   QUESTION_STATUS_META,
   QUESTION_STATUS_ORDER,
+  type QuestionCategory,
+  type QuestionRef,
   type QuestionStatus,
   type Task
 } from '../types'
@@ -17,6 +19,8 @@ interface Props {
   onRemove: (id: string) => Promise<void>
   onToggleGoal: (isGoal: boolean) => void
   onArchive?: () => void
+  categories?: QuestionCategory[]
+  onToggleCategory?: (categoryId: string, ref: QuestionRef, add: boolean) => Promise<void>
 }
 
 export function PracticeTestRow({
@@ -27,7 +31,9 @@ export function PracticeTestRow({
   onEditTitle,
   onRemove,
   onToggleGoal,
-  onArchive
+  onArchive,
+  categories,
+  onToggleCategory
 }: Props) {
   const [expanded, setExpanded] = useState(false)
   const [editing, setEditing] = useState(false)
@@ -170,6 +176,9 @@ export function PracticeTestRow({
               <div className="grid grid-cols-5 sm:grid-cols-7 gap-2">
                 {questions.map((q, i) => {
                   const meta = QUESTION_STATUS_META[q]
+                  const inCategory = categories?.some((c) =>
+                    c.questions.some((r) => r.taskId === task.id && r.questionIndex === i)
+                  ) ?? false
                   return (
                     <button
                       key={i}
@@ -180,7 +189,7 @@ export function PracticeTestRow({
                         color: meta.text,
                         borderColor: meta.border
                       }}
-                      aria-label={`Question ${i + 1}: ${meta.label}${task.questionNotes?.[i] ? ' (has note)' : ''}`}
+                      aria-label={`Question ${i + 1}: ${meta.label}${task.questionNotes?.[i] ? ' (has note)' : ''}${inCategory ? ' (in category)' : ''}`}
                     >
                       <span className="opacity-70 text-xs">Q{i + 1}</span>
                       <span className="text-xl leading-none mt-0.5">{meta.symbol}</span>
@@ -189,6 +198,9 @@ export function PracticeTestRow({
                           className="absolute top-1 right-1.5 w-1.5 h-1.5 rounded-full"
                           style={{ background: meta.border }}
                         />
+                      )}
+                      {inCategory && (
+                        <span className="absolute bottom-1 right-1.5 w-1.5 h-1.5 rounded-full bg-mauve" />
                       )}
                     </button>
                   )
@@ -256,6 +268,35 @@ export function PracticeTestRow({
             onChange={(e) => setNoteText(e.target.value)}
           />
         </div>
+        {categories && categories.length > 0 && pickingIndex != null && (
+          <div className="mt-4">
+            <label className="block text-xs font-semibold text-berry/70 mb-2">
+              Categories
+            </label>
+            <div className="flex flex-col gap-1.5">
+              {categories.map((cat) => {
+                const ref: QuestionRef = { taskId: task.id, questionIndex: pickingIndex }
+                const checked = cat.questions.some(
+                  (r) => r.taskId === task.id && r.questionIndex === pickingIndex
+                )
+                return (
+                  <label
+                    key={cat.id}
+                    className="flex items-center gap-2.5 rounded-2xl px-3 py-2 bg-petal/40 cursor-pointer hover:bg-mauve/30 transition"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => onToggleCategory?.(cat.id, ref, !checked)}
+                      className="accent-berry"
+                    />
+                    <span className="font-body text-sm text-berry">{cat.name}</span>
+                  </label>
+                )
+              })}
+            </div>
+          </div>
+        )}
       </Dialog>
     </motion.li>
   )
