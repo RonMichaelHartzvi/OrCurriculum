@@ -238,7 +238,11 @@ npm install
 npm run dev                # http://localhost:5173
 npm run typecheck          # tsc -b --noEmit
 npm run build              # tsc -b && vite build → dist/ + sw.js
+npm test                   # run Vitest unit tests (pure lib functions, no Firebase)
+npm run test:watch         # same in watch mode
 ```
+
+Unit tests live in `src/lib/__tests__/` and cover four pure utility modules: `periods.ts` (date boundaries, period keys), `time.ts` (duration formatting and parsing), `progress.ts` (goal progress calculation for both count and time goals), and `calendarColors.ts` (Google Calendar color mapping). These modules contain the core business logic — testing them catches regressions without any Firebase setup. Firebase hooks and React components are not tested here; they require a Firebase emulator.
 
 Firebase project auth for CLI: `firebase login` (Google), `firebase use --add orcurriculum`. `.firebaserc` is git-ignored so each contributor runs `firebase use --add` locally.
 
