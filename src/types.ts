@@ -8,6 +8,7 @@ export interface Course {
   emoji: string
   color: string
   createdAt: Timestamp | null
+  archivedAt?: Timestamp | null
 }
 
 export type GoalUnit = 'count' | 'minutes'

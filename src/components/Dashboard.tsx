@@ -30,6 +30,7 @@ export function Dashboard({ user }: { user: User }) {
   const [showNewCourse, setShowNewCourse] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
   const [confirmSignOut, setConfirmSignOut] = useState(false)
+  const [showArchived, setShowArchived] = useState(false)
 
   useEffect(() => {
     if (goals.length) archivePastPeriods(uid, goals).catch((e) => console.warn('archive:', e))
@@ -105,58 +106,90 @@ export function Dashboard({ user }: { user: User }) {
       </header>
 
       <main className="max-w-4xl mx-auto px-5 pb-24">
-        {courses.length === 0 ? (
-          <div className="card p-10 text-center mt-6">
-            <div className="text-5xl mb-3">🌷</div>
-            <h2 className="text-xl font-display font-bold text-deepRose">
-              No courses yet
-            </h2>
-            <p className="text-berry/70 mt-1 mb-5">
-              Add your first course to start setting goals.
-            </p>
-            <button className="btn-primary" onClick={() => setShowNewCourse(true)}>
-              + New course
-            </button>
-          </div>
-        ) : (
-          <div className="grid gap-5 sm:grid-cols-2">
-            <AnimatePresence>
-              {courses.map((c) => (
-                <motion.div layout key={c.id}>
-                  <CourseCard
-                    course={c}
-                    goals={goalsByCourse.get(c.id) ?? []}
-                    entries={entries}
-                    taskGoals={taskGoalsByCourse.get(c.id) ?? []}
-                    activeSession={activeSession}
-                    onOpen={() => openCourse(c.id)}
-                    onAddGoal={(data) => addGoal({ courseId: c.id, ...data })}
-                    onLog={(goal, amount) =>
-                      addEntry({
-                        courseId: goal.courseId,
-                        goalId: goal.id,
-                        metric: goal.metric,
-                        amount,
-                        periodKey: periodKey(goal.period as PeriodKind)
-                      })
-                    }
-                    onStartSession={(input) => handleStartSession(c.id, input)}
-                    onCompleteSession={completeSession}
-                    onCancelSession={cancelSession}
-                    onEndNowSession={endNow}
-                    onToggle={(id, done) => toggleTask(id, done)}
-                    onToggleGoal={(id, isGoal) => toggleTaskGoal(id, isGoal)}
-                    onUpdateQuestion={(task, index, status, note) =>
-                      updateQuestionStatus(task, index, status, note)
-                    }
-                    onResetPracticeTest={(task) => resetPracticeTest(task)}
-                    openTaskCount={openTasksByCourse.get(c.id) ?? 0}
-                  />
-                </motion.div>
-              ))}
-            </AnimatePresence>
-          </div>
-        )}
+        {(() => {
+          const activeCourses = courses.filter((c) => !c.archivedAt)
+          const archivedCourses = courses.filter((c) => !!c.archivedAt)
+          return (
+            <>
+              {activeCourses.length === 0 ? (
+                <div className="card p-10 text-center mt-6">
+                  <div className="text-5xl mb-3">🌷</div>
+                  <h2 className="text-xl font-display font-bold text-deepRose">
+                    No courses yet
+                  </h2>
+                  <p className="text-berry/70 mt-1 mb-5">
+                    Add your first course to start setting goals.
+                  </p>
+                  <button className="btn-primary" onClick={() => setShowNewCourse(true)}>
+                    + New course
+                  </button>
+                </div>
+              ) : (
+                <div className="grid gap-5 sm:grid-cols-2">
+                  <AnimatePresence>
+                    {activeCourses.map((c) => (
+                      <motion.div layout key={c.id}>
+                        <CourseCard
+                          course={c}
+                          goals={goalsByCourse.get(c.id) ?? []}
+                          entries={entries}
+                          taskGoals={taskGoalsByCourse.get(c.id) ?? []}
+                          activeSession={activeSession}
+                          onOpen={() => openCourse(c.id)}
+                          onAddGoal={(data) => addGoal({ courseId: c.id, ...data })}
+                          onLog={(goal, amount) =>
+                            addEntry({
+                              courseId: goal.courseId,
+                              goalId: goal.id,
+                              metric: goal.metric,
+                              amount,
+                              periodKey: periodKey(goal.period as PeriodKind)
+                            })
+                          }
+                          onStartSession={(input) => handleStartSession(c.id, input)}
+                          onCompleteSession={completeSession}
+                          onCancelSession={cancelSession}
+                          onEndNowSession={endNow}
+                          onToggle={(id, done) => toggleTask(id, done)}
+                          onToggleGoal={(id, isGoal) => toggleTaskGoal(id, isGoal)}
+                          onUpdateQuestion={(task, index, status, note) =>
+                            updateQuestionStatus(task, index, status, note)
+                          }
+                          onResetPracticeTest={(task) => resetPracticeTest(task)}
+                          openTaskCount={openTasksByCourse.get(c.id) ?? 0}
+                        />
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
+                </div>
+              )}
+
+              {archivedCourses.length > 0 && (
+                <div className="mt-8">
+                  <button
+                    className="btn-ghost text-sm text-berry/60"
+                    onClick={() => setShowArchived((v) => !v)}
+                  >
+                    Archived ({archivedCourses.length}) {showArchived ? '▲' : '▼'}
+                  </button>
+                  {showArchived && (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {archivedCourses.map((c) => (
+                        <button
+                          key={c.id}
+                          className="chip cursor-pointer hover:bg-petal transition"
+                          onClick={() => openCourse(c.id)}
+                        >
+                          {c.emoji} {c.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          )
+        })()}
       </main>
 
       <div className="fixed bottom-6 right-6 sm:bottom-8 sm:right-8">

@@ -51,5 +51,15 @@ export function useCourses(uid: string | null) {
     await deleteDoc(doc(db, 'users', uid, 'courses', id))
   }
 
-  return { courses, loading, addCourse, updateCourse, removeCourse }
+  async function archiveCourse(id: string) {
+    if (!uid) return
+    await updateDoc(doc(db, 'users', uid, 'courses', id), { archivedAt: serverTimestamp() })
+  }
+
+  async function unarchiveCourse(id: string) {
+    if (!uid) return
+    await updateDoc(doc(db, 'users', uid, 'courses', id), { archivedAt: null })
+  }
+
+  return { courses, loading, addCourse, updateCourse, removeCourse, archiveCourse, unarchiveCourse }
 }

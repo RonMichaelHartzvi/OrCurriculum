@@ -38,7 +38,7 @@ interface Props {
 
 export function CoursePage({ user, courseId }: Props) {
   const uid = user.uid
-  const { courses, updateCourse, removeCourse } = useCourses(uid)
+  const { courses, updateCourse, removeCourse, archiveCourse, unarchiveCourse } = useCourses(uid)
   const { goals, addGoal, updateGoal, removeGoal } = useGoals(uid)
   const { entries, addEntry } = useEntries(uid)
   const { history } = useHistory(uid)
@@ -74,6 +74,7 @@ export function CoursePage({ user, courseId }: Props) {
   } = useSession(uid)
 
   const course = courses.find((c) => c.id === courseId)
+  const isArchived = !!course?.archivedAt
   const courseGoals = useMemo(
     () => goals.filter((g) => g.courseId === courseId),
     [goals, courseId]
@@ -189,7 +190,10 @@ export function CoursePage({ user, courseId }: Props) {
               {course.emoji}
             </div>
             <div>
-              <h1 className="text-3xl font-display font-bold text-deepRose">{course.name}</h1>
+              <div className="flex items-center gap-2">
+                <h1 className="text-3xl font-display font-bold text-deepRose">{course.name}</h1>
+                {isArchived && <span className="chip text-xs">Archived</span>}
+              </div>
               <p className="text-sm text-berry/70">
                 {courseGoals.length} {courseGoals.length === 1 ? 'goal' : 'goals'} ·{' '}
                 {courseTasks.filter((t) => !t.done && !t.archived).length} open{' '}
@@ -211,28 +215,34 @@ export function CoursePage({ user, courseId }: Props) {
               </button>
             }
           />
-          <div className="mb-5 flex flex-wrap gap-2">
-            {logGroups.map((group) => {
-              const label =
-                group.unit === 'minutes' ? 'study time' : group.metric
-              return (
-                <button
-                  key={`${group.unit}|${group.metric}`}
-                  className="btn-primary text-sm"
-                  onClick={() => setLogGroup(group)}
-                >
-                  + Log {label}
-                </button>
-              )
-            })}
-            <button
-              className="btn-soft text-sm"
-              onClick={() => setSessionForGoal('freeform')}
-              disabled={Boolean(activeSession && activeSession.courseId !== courseId)}
-            >
-              ▶ Start session
-            </button>
-          </div>
+          {isArchived ? (
+            <p className="mb-5 text-sm text-berry/60 italic">
+              This course is archived — unarchive it to log progress or start sessions.
+            </p>
+          ) : (
+            <div className="mb-5 flex flex-wrap gap-2">
+              {logGroups.map((group) => {
+                const label =
+                  group.unit === 'minutes' ? 'study time' : group.metric
+                return (
+                  <button
+                    key={`${group.unit}|${group.metric}`}
+                    className="btn-primary text-sm"
+                    onClick={() => setLogGroup(group)}
+                  >
+                    + Log {label}
+                  </button>
+                )
+              })}
+              <button
+                className="btn-soft text-sm"
+                onClick={() => setSessionForGoal('freeform')}
+                disabled={Boolean(activeSession && activeSession.courseId !== courseId)}
+              >
+                ▶ Start session
+              </button>
+            </div>
+          )}
           {courseGoals.length === 0 && taskGoals.length === 0 ? (
             <div className="text-center text-berry/70 py-8">
               <div className="text-3xl mb-2">🎯</div>
@@ -463,6 +473,13 @@ export function CoursePage({ user, courseId }: Props) {
           await removeCourse(course.id)
           openDashboard()
         }}
+        onArchive={!isArchived ? async () => {
+          await archiveCourse(course.id)
+          openDashboard()
+        } : undefined}
+        onUnarchive={isArchived ? async () => {
+          await unarchiveCourse(course.id)
+        } : undefined}
       />
 
       <GoalFormDialog
